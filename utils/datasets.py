@@ -4,6 +4,7 @@ from abc import abstractmethod
 import numpy as np
 import multiprocessing
 from utils import augmentations, experiment_manager, geofiles
+from affine import Affine
 
 
 class AbstractPopDataset(torch.utils.data.Dataset):
@@ -11,8 +12,17 @@ class AbstractPopDataset(torch.utils.data.Dataset):
     def __init__(self, cfg: experiment_manager.CfgNode, run_type: str):
         super().__init__()
         self.cfg = cfg
-        self.run_type = run_type
         self.root_path = Path(cfg.PATHS.DATASET)
+        samples_file = self.root_path / 'samples.json'
+        self.samples = geofiles.load_json(samples_file)
+
+        self.sites = cfg.DATALOADER.SITES
+        for site in self.sites:
+            self.samples = [s for s in self.samples if s['site'] == site]
+
+        self.run_type = run_type
+        self.indices = [['B2', 'B3', 'B4', 'B8'].index(band) for band in cfg.DATALOADER.SPECTRAL_BANDS]
+        self.season = cfg.DATALOADER.SEASON
 
     @abstractmethod
     def __getitem__(self, index: int) -> dict:
@@ -22,17 +32,37 @@ class AbstractPopDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         pass
 
-    def _s2_img(self, site: str, year: int, season: str, i: int, j: int) -> np.ndarray:
-        file = self.root_path / site / year / f's2_{year}_{season}_{i:03d}_{j:03d}.tif'
+    def _get_s2_patch(self, site: str, year: int, season: str, i: int, j: int) -> np.ndarray:
+        file = self.root_path / site / str(year) / f's2_{year}_{season}_{i:03d}_{j:03d}.tif'
         img, _, _ = geofiles.read_tif(file)
+        img = img[:, :, self.indices]
         return img.astype(np.float32)
 
-    def _load_building_label(self, aoi_id: str, year: int, month: int) -> np.ndarray:
-        folder = self.root_path / 'train' / aoi_id / 'labels_raster'
-        file = folder / f'global_monthly_{year}_{month:02d}_mosaic_{aoi_id}_Buildings.tif'
-        label, _, _ = geofiles.read_tif(file)
-        label = label > 0
-        return label.astype(np.float32)
+    def _get_patch_geo(self, site: str, i: int, j: int) -> tuple:
+        file = self.root_path / site / '2016' / f's2_2016_wet_{i:03d}_{j:03d}.tif'
+        _, transform, crs = geofiles.read_tif(file)
+        return transform, crs
+
+    def _get_pop_label(self, site: str, year: int, i: int, j: int) -> float:
+        for s in self.metadata:
+            if s['site'] == site and s['year'] == year and s['i'] == i and s['j'] == j:
+                return float(s['pop'])
+        raise Exception('sample not found')
+
+    def get_pop_grid_geo(self, site: str, resolution: int = 100) -> tuple:
+        file = self.root_path / site / '2016' / f's2_2016_wet_{0:03d}_{0:03d}.tif'
+        _, s2_transform, crs = geofiles.read_tif(file)
+        _, _, x_origin, _, _, y_origin, *_ = s2_transform
+        pop_transform = (x_origin, resolution, 0.0, y_origin, 0.0, -resolution)
+        pop_transform = Affine.from_gdal(*pop_transform)
+        return pop_transform, crs
+
+    def get_pop_grid(self, site: str) -> np.ndarray:
+        site_samples = [s for s in self.samples if s['site'] == site]
+        m = max([s['i'] for s in site_samples]) + 1
+        n = max([s['j'] for s in site_samples]) + 1
+        arr = np.full((m, n, 2), fill_value=np.nan, dtype=np.float32)
+        return arr
 
     def __len__(self):
         return self.length
@@ -42,116 +72,104 @@ class AbstractPopDataset(torch.utils.data.Dataset):
 
 
 # dataset for urban extraction with building footprints
-class SpaceNet7CDDataset(AbstractPopDataset):
+class PopDataset(AbstractPopDataset):
 
     def __init__(self, cfg: experiment_manager.CfgNode, run_type: str, no_augmentations: bool = False,
-                 dataset_mode: str = None, disable_multiplier: bool = False, disable_unlabeled: bool = False):
+                 disable_unlabeled: bool = False):
         super().__init__(cfg, run_type)
-
-        self.dataset_mode = cfg.DATALOADER.MODE if dataset_mode is None else dataset_mode
-        self.include_building_labels = cfg.DATALOADER.INCLUDE_BUILDING_LABELS
 
         # handling transformations of data
         self.no_augmentations = no_augmentations
-        self.transform = augmentations.compose_transformations(cfg, no_augmentations)
+        self.transform = augmentations.compose_transformations(cfg.AUGMENTATION, no_augmentations)
 
-        # loading labeled samples (sn7 train set) and subset to run type aoi ids
+        # subset samples
+        self.samples = [s for s in self.samples if not bool(s['isnan'])]
         if run_type == 'training':
-            self.aoi_ids = list(cfg.DATASET.TRAINING_IDS)
-        elif run_type == 'validation':
-            self.aoi_ids = list(cfg.DATASET.VALIDATION_IDS)
-        else:
-            self.aoi_ids = list(cfg.DATASET.TEST_IDS)
-
-        self.labeled = [True] * len(self.aoi_ids)
-        self.metadata = geofiles.load_json(self.root_path / f'metadata_train.json')
+            self.samples = [s for s in self.samples if s['random'] <= self.cfg.DATALOADER.SPLIT]
+        if run_type == 'validation':
+            self.samples = [s for s in self.samples if s['random'] > self.cfg.DATALOADER.SPLIT]
 
         # unlabeled data for semi-supervised learning
-        if (cfg.DATALOADER.INCLUDE_UNLABELED or cfg.DATALOADER.INCLUDE_UNLABELED_VALIDATION) and not disable_unlabeled:
-            aoi_ids_unlabelled = []
-            if cfg.DATALOADER.INCLUDE_UNLABELED:
-                aoi_ids_unlabelled += list(cfg.DATASET.UNLABELED_IDS)
-                metadata_test = geofiles.load_json(self.root_path / f'metadata_test.json')
-                for aoi_id, timestamps in metadata_test.items():
-                    self.metadata[aoi_id] = timestamps
-            if cfg.DATALOADER.INCLUDE_UNLABELED_VALIDATION:
-                aoi_ids_unlabelled += list(cfg.DATASET.VALIDATION_IDS)
-            aoi_ids_unlabelled = sorted(aoi_ids_unlabelled)
-            self.aoi_ids.extend(aoi_ids_unlabelled)
-            self.labeled.extend([False] * len(aoi_ids_unlabelled))
-
-        if not disable_multiplier:
-            self.aoi_ids = self.aoi_ids * cfg.DATALOADER.TRAINING_MULTIPLIER
-            self.labeled = self.labeled * cfg.DATALOADER.TRAINING_MULTIPLIER
+        if (cfg.DATALOADER.INCLUDE_UNLABELED):
+            pass
 
         manager = multiprocessing.Manager()
-        self.unlabeled_ids = manager.list(list(self.cfg.DATASET.UNLABELED_IDS))
-        self.aoi_ids = manager.list(self.aoi_ids)
-        self.labeled = manager.list(self.labeled)
-        self.metadata = manager.dict(self.metadata)
+        self.samples = manager.list(self.samples)
 
-        self.length = len(self.aoi_ids)
+        self.length = len(self.samples)
 
     def __getitem__(self, index):
 
-        aoi_id = self.aoi_ids[index]
-        labeled = self.labeled[index]
-        dataset = 'test' if aoi_id in self.unlabeled_ids else 'train'
+        s = self.samples[index]
+        site, year, i, j = s['site'], s['year'], s['i'], s['j']
 
-        timestamps = self.metadata[aoi_id]
-        timestamps = [ts for ts in timestamps if not ts['mask']]
+        y = s['pop']
 
-        if self.dataset_mode == 'first_last':
-            indices = [0, -1]
+        if self.season == 'wet' or self.season == 'dry':
+            season = self.season
         else:
-            indices = sorted(np.random.randint(0, len(timestamps), size=2))
+            season = 'wet' if np.random.rand(1) > 0.5 else 'dry'
+        img = self._get_s2_patch(site, year, season, i, j)
 
-        year_t1, month_t1 = timestamps[indices[0]]['year'], timestamps[indices[0]]['month']
-        year_t2, month_t2 = timestamps[indices[1]]['year'], timestamps[indices[1]]['month']
-
-        img_t1 = self._load_mosaic(aoi_id, dataset, year_t1, month_t1)
-        img_t2 = self._load_mosaic(aoi_id, dataset, year_t2, month_t2)
-        imgs = np.concatenate((img_t1, img_t2), axis=-1)
-
-        if labeled:
-            change = self._load_change_label(aoi_id, year_t1, month_t1, year_t2, month_t2)
-            if self.include_building_labels:
-                buildings_t1 = self._load_building_label(aoi_id, year_t1, month_t1)
-                buildings_t2 = self._load_building_label(aoi_id, year_t2, month_t2)
-                buildings = np.concatenate((buildings_t1, buildings_t2), axis=-1).astype(np.float32)
-            else:
-                buildings = np.zeros((change.shape[0], change.shape[1], 2), dtype=np.float32)
-        else:
-            change = np.zeros((img_t1.shape[0], img_t1.shape[1], 1), dtype=np.float32)
-            buildings = np.zeros((change.shape[0], change.shape[1], 2), dtype=np.float32)
-
-        imgs, buildings, change = self.transform((imgs, buildings, change))
-        img_t1, img_t2 = imgs[:self.img_bands, ], imgs[self.img_bands:, ]
+        x = self.transform(img)
 
         item = {
-            'x_t1': img_t1,
-            'x_t2': img_t2,
-            'y_change': change,
-            'aoi_id': aoi_id,
-            'year_t1': year_t1,
-            'month_t1': month_t1,
-            'year_t2': year_t2,
-            'month_t2': month_t2,
-            'is_labeled': labeled,
+            'x': x,
+            'y': torch.tensor([y]),
+            'site': site,
+            'year': year,
+            'season': season,
+            'i': i,
+            'j': j,
         }
-
-        if self.include_building_labels:
-            buildings_t1, buildings_t2 = buildings[0, ], buildings[1, ]
-            item['y_sem_t1'] = buildings_t1.unsqueeze(0)
-            item['y_sem_t2'] = buildings_t2.unsqueeze(0)
 
         return item
 
-    def get_index(self, aoi_id: str) -> int:
-        for index, candidate_aoi_id in enumerate(self.aoi_ids):
-            if aoi_id == candidate_aoi_id:
-                return index
-        return None
+    def __len__(self):
+        return self.length
+
+    def __str__(self):
+        return f'Dataset with {self.length} samples.'
+
+
+# dataset for urban extraction with building footprints
+class PopInferenceDataset(AbstractPopDataset):
+
+    def __init__(self, cfg: experiment_manager.CfgNode):
+        super().__init__(cfg, 'inference')
+
+        # handling transformations of data
+        self.no_augmentations = True
+        self.transform = augmentations.compose_transformations(cfg.AUGMENTATION, self.no_augmentations)
+
+        manager = multiprocessing.Manager()
+        self.samples = manager.list(self.samples)
+
+        self.length = len(self.samples)
+
+    def __getitem__(self, index):
+
+        s = self.samples[index]
+        site, year, i, j, isnan, pop = s['site'], s['year'], s['i'], s['j'], bool(s['isnan']), float(s['pop'])
+
+        img = self._get_s2_patch(site, year, 'wet', i, j)
+
+        # # resampling images to desired patch size
+        # if img.shape[0] != self.patch_size or img.shape[1] != self.patch_size:
+        #     img = cv2.resize(img, (self.patch_size, self.patch_size), interpolation=cv2.INTER_NEAREST)
+
+        x = self.transform(img)
+
+        item = {
+            'x': x,
+            'y': np.nan if isnan else pop,
+            'site': site,
+            'year': year,
+            'i': i,
+            'j': j,
+        }
+
+        return item
 
     def __len__(self):
         return self.length

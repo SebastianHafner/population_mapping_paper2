@@ -1,31 +1,29 @@
+import torch
 import torchvision.transforms.functional as TF
 from torchvision import transforms
 import numpy as np
+from utils import experiment_manager
+import cv2
 
 
-def compose_transformations(cfg, no_augmentations: bool):
-    if no_augmentations:
-        return transforms.Compose([Numpy2Torch()])
-
+def compose_transformations(augmentation_cfg: experiment_manager.CfgNode, no_augmentations: bool = False):
     transformations = []
 
-    # cropping
-    if cfg.AUGMENTATION.IMAGE_OVERSAMPLING_TYPE == 'none':
-        transformations.append(UniformCrop(cfg.AUGMENTATION.CROP_SIZE))
-    else:
-        transformations.append(ImportanceRandomCrop(cfg.AUGMENTATION.CROP_SIZE))
+    if not no_augmentations:
+        if augmentation_cfg.RANDOM_FLIP:
+            transformations.append(RandomFlip())
 
-    if cfg.AUGMENTATION.RANDOM_FLIP:
-        transformations.append(RandomFlip())
+        if augmentation_cfg.RANDOM_ROTATE:
+            transformations.append(RandomRotate())
 
-    if cfg.AUGMENTATION.RANDOM_ROTATE:
-        transformations.append(RandomRotate())
+        if augmentation_cfg.COLOR_SHIFT:
+            transformations.append(ColorShift())
 
-    if cfg.AUGMENTATION.COLOR_SHIFT:
-        transformations.append(ColorShift())
+        if augmentation_cfg.GAMMA_CORRECTION:
+            transformations.append(GammaCorrection())
 
-    if cfg.AUGMENTATION.GAMMA_CORRECTION:
-        transformations.append(GammaCorrection())
+        if augmentation_cfg.RESIZE:
+            transformations.append(Resize(augmentation_cfg.RESIZE))
 
     transformations.append(Numpy2Torch())
 
@@ -33,45 +31,32 @@ def compose_transformations(cfg, no_augmentations: bool):
 
 
 class Numpy2Torch(object):
-    def __call__(self, args):
-        img_t1, img_t2, label = args
-        img_t1_tensor = TF.to_tensor(img_t1)
-        img_t2_tensor = TF.to_tensor(img_t2)
-        label_tensor = TF.to_tensor(label)
-        return img_t1_tensor, img_t2_tensor, label_tensor
+    def __call__(self, img: np.ndarray) -> torch.Tensor:
+        img_tensor = TF.to_tensor(img)
+        return img_tensor
 
 
 class RandomFlip(object):
-    def __call__(self, args):
-        img_t1, img_t2, label = args
+    def __call__(self, img: np.ndarray) -> np.ndarray:
         horizontal_flip = np.random.choice([True, False])
         vertical_flip = np.random.choice([True, False])
 
         if horizontal_flip:
-            img_t1 = np.flip(img_t1, axis=1)
-            img_t2 = np.flip(img_t2, axis=1)
-            label = np.flip(label, axis=1)
+            img = np.flip(img, axis=1)
 
         if vertical_flip:
-            img_t1 = np.flip(img_t1, axis=0)
-            img_t2 = np.flip(img_t2, axis=0)
-            label = np.flip(label, axis=0)
+            img = np.flip(img, axis=0)
 
-        img_t1 = img_t1.copy()
-        img_t2 = img_t2.copy()
-        label = label.copy()
+        img = img.copy()
 
-        return img_t1, img_t2, label
+        return img
 
 
 class RandomRotate(object):
-    def __call__(self, args):
-        img_t1, img_t2, label = args
+    def __call__(self, img: np.ndarray) -> np.ndarray:
         k = np.random.randint(1, 4)  # number of 90 degree rotations
-        img_t1 = np.rot90(img_t1, k, axes=(0, 1)).copy()
-        img_t2 = np.rot90(img_t2, k, axes=(0, 1)).copy()
-        label = np.rot90(label, k, axes=(0, 1)).copy()
-        return img_t1, img_t2, label
+        img = np.rot90(img, k, axes=(0, 1)).copy()
+        return img
 
 
 class ColorShift(object):
@@ -79,13 +64,10 @@ class ColorShift(object):
         self.min_factor = min_factor
         self.max_factor = max_factor
 
-    def __call__(self, args):
-        img_t1, img_t2, label = args
-        factors_t1 = np.random.uniform(self.min_factor, self.max_factor, img_t1.shape[-1])
-        img_t1_rescaled = np.clip(img_t1 * factors_t1[np.newaxis, np.newaxis, :], 0, 1).astype(np.float32)
-        factors_t2 = np.random.uniform(self.min_factor, self.max_factor, img_t2.shape[-1])
-        img_t2_rescaled = np.clip(img_t2 * factors_t2[np.newaxis, np.newaxis, :], 0, 1).astype(np.float32)
-        return img_t1_rescaled, img_t2_rescaled, label
+    def __call__(self, img: np.ndarray) -> np.ndarray:
+        factors = np.random.uniform(self.min_factor, self.max_factor, img.shape[-1])
+        img_rescaled = np.clip(img * factors[np.newaxis, np.newaxis, :], 0, 1).astype(np.float32)
+        return img_rescaled
 
 
 class GammaCorrection(object):
@@ -94,49 +76,16 @@ class GammaCorrection(object):
         self.min_gamma = min_gamma
         self.max_gamma = max_gamma
 
-    def __call__(self, args):
-        img_t1, img_t2, label = args
-        gamma_t1 = np.random.uniform(self.min_gamma, self.max_gamma, img_t1.shape[-1])
-        img_t1_gamma_corrected = np.clip(np.power(img_t1, gamma_t1[np.newaxis, np.newaxis, :]), 0, 1).astype(np.float32)
-        gamma_t2 = np.random.uniform(self.min_gamma, self.max_gamma, img_t2.shape[-1])
-        img_t2_gamma_corrected = np.clip(np.power(img_t2, gamma_t2[np.newaxis, np.newaxis, :]), 0, 1).astype(np.float32)
-        return img_t1_gamma_corrected, img_t2_gamma_corrected, label
+    def __call__(self, img: np.ndarray) -> np.ndarray:
+        gamma = np.random.uniform(self.min_gamma, self.max_gamma, img.shape[-1])
+        img_gamma_corrected = np.clip(np.power(img, gamma[np.newaxis, np.newaxis, :]), 0, 1).astype(np.float32)
+        return img_gamma_corrected
 
 
-# Performs uniform cropping on images
-class UniformCrop(object):
-    def __init__(self, crop_size):
-        self.crop_size = crop_size
+class Resize(object):
+    def __init__(self, size: int):
+        self.size = size
 
-    def random_crop(self, args):
-        img_t1, img_t2, label = args
-        height, width, _ = label.shape
-        crop_limit_x = width - self.crop_size
-        crop_limit_y = height - self.crop_size
-        x = np.random.randint(0, crop_limit_x)
-        y = np.random.randint(0, crop_limit_y)
-
-        img_t1_crop = img_t1[y:y+self.crop_size, x:x+self.crop_size, ]
-        img_t2_crop = img_t2[y:y + self.crop_size, x:x + self.crop_size, ]
-        label_crop = label[y:y+self.crop_size, x:x+self.crop_size, ]
-        return img_t1_crop, img_t2_crop, label_crop
-
-    def __call__(self, args):
-        img_t1, img_t2, label = self.random_crop(args)
-        return img_t1, img_t2, label
-
-
-class ImportanceRandomCrop(UniformCrop):
-    def __call__(self, args):
-
-        sample_size = 20
-        balancing_factor = 5
-
-        random_crops = [self.random_crop(args) for _ in range(sample_size)]
-        crop_weights = np.array([crop_label.sum() for _, _, crop_label in random_crops]) + balancing_factor
-        crop_weights = crop_weights / crop_weights.sum()
-
-        sample_idx = np.random.choice(sample_size, p=crop_weights)
-        img_t1, img_t2, label = random_crops[sample_idx]
-
-        return img_t1, img_t2, label
+    def __call__(self, img: np.ndarray) -> np.ndarray:
+            img_upsampled = cv2.resize(img, (self.size, self.size), interpolation=cv2.INTER_NEAREST)
+            return img_upsampled

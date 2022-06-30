@@ -8,21 +8,7 @@ from fvcore.common.config import CfgNode as _CfgNode
 from pathlib import Path
 
 
-def default_argument_parser():
-    # https://docs.python.org/3/library/argparse.html#the-add-argument-method
-    parser = argparse.ArgumentParser(description="Experiment Args")
-    parser.add_argument('-c', "--config-file", dest='config_file', required=True, help="path to config file")
-    parser.add_argument('-o', "--output-dir", dest='output_dir', required=True, help="path to output directory")
-    parser.add_argument('-d', "--dataset-dir", dest='dataset_dir', default="", required=True,
-                        help="path to output directory")
 
-    parser.add_argument(
-        "opts",
-        help="Modify config options using the command-line",
-        default=None,
-        nargs=argparse.REMAINDER,
-    )
-    return parser
 
 
 class CfgNode(_CfgNode):
@@ -63,6 +49,7 @@ def new_config():
     C.CONFIG_DIR = 'config/'
 
     C.PATHS = CfgNode()
+    C.LOGGING = CfgNode()
     C.TRAINER = CfgNode()
     C.MODEL = CfgNode()
     C.DATALOADER = CfgNode()
