@@ -1,5 +1,5 @@
 _BASE_: "base.yaml"
 DEBUG: False
 
-AUGMENTATION:
-  RESIZE: 200
+DATALOADER:
+  SEASON: 'dry'
