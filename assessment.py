@@ -29,6 +29,7 @@ def produce_population_grid(cfg: experiment_manager.CfgNode, site: str = 'kigali
     net.eval()
     ds = datasets.PopInferenceDataset(cfg)
     arr = ds.get_pop_grid(site)
+    tracker = 0
     with torch.no_grad():
         for item in ds:
             x = item['x'].to(device)
@@ -37,6 +38,9 @@ def produce_population_grid(cfg: experiment_manager.CfgNode, site: str = 'kigali
             i, j = item['i'], item['j']
             arr[i, j, 0] = float(pred)
             arr[i, j, 1] = gt
+            tracker += 1
+            if tracker % 1_000 == 0:
+                print(tracker)
 
     transform, crs = ds.get_pop_grid_geo(site)
     file = Path(cfg.PATHS.OUTPUT) / 'inference' / 'population_grids' / f'pop_{site}_{year}.tif'
