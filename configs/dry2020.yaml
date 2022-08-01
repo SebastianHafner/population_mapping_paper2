@@ -2,7 +2,5 @@ _BASE_: "base.yaml"
 DEBUG: False
 
 DATALOADER:
+  YEAR: 2020
   SEASON: 'dry'
-
-AUGMENTATION:
-  RESIZE: 200

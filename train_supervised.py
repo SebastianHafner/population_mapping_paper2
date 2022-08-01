@@ -43,7 +43,7 @@ def run_training(cfg):
     global_step = epoch_float = 0
 
     evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
-    evaluation.model_evaluation(net, cfg, 'validation', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
+    evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
 
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
@@ -74,13 +74,12 @@ def run_training(cfg):
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
                 # evaluation on sample of training and validation set
                 evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
-                evaluation.model_evaluation(net, cfg, 'validation', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
+                evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
 
                 # logging
                 time = timeit.default_timer() - start
                 wandb.log({
                     'loss': np.mean(loss_set),
-                    'labeled_percentage': 100,
                     'time': time,
                     'step': global_step,
                     'epoch': epoch_float,
@@ -93,7 +92,7 @@ def run_training(cfg):
         print(f'epoch float {epoch_float} (step {global_step}) - epoch {epoch}')
         # evaluation at the end of an epoch
         evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step)
-        evaluation.model_evaluation(net, cfg, 'validation', epoch_float, global_step)
+        evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
 
         if epoch in save_checkpoints and not cfg.DEBUG:
             print(f'saving network', flush=True)

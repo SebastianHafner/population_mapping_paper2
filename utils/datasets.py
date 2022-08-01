@@ -9,19 +9,15 @@ from affine import Affine
 
 class AbstractPopDataset(torch.utils.data.Dataset):
 
-    def __init__(self, cfg: experiment_manager.CfgNode, run_type: str):
+    def __init__(self, cfg: experiment_manager.CfgNode):
         super().__init__()
         self.cfg = cfg
         self.root_path = Path(cfg.PATHS.DATASET)
-        samples_file = self.root_path / 'samples.json'
-        self.samples = geofiles.load_json(samples_file)
-
-        self.sites = cfg.DATALOADER.SITES
-        for site in self.sites:
-            self.samples = [s for s in self.samples if s['site'] == site]
-
-        self.run_type = run_type
+        metadata_file = self.root_path / 'metadata.json'
+        self.metadata = geofiles.load_json(metadata_file)
+        self.samples = self.metadata['samples']
         self.indices = [['B2', 'B3', 'B4', 'B8'].index(band) for band in cfg.DATALOADER.SPECTRAL_BANDS]
+        self.year = cfg.DATALOADER.YEAR
         self.season = cfg.DATALOADER.SEASON
 
     @abstractmethod
@@ -32,11 +28,18 @@ class AbstractPopDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         pass
 
-    def _get_s2_patch(self, site: str, year: int, season: str, i: int, j: int) -> np.ndarray:
-        file = self.root_path / site / str(year) / f's2_{year}_{season}_{i:03d}_{j:03d}.tif'
+    def _get_s2_img(self, site: str, year: int, season: str) -> np.ndarray:
+        file = self.root_path / site / 's2' / f's2_{year}_{season}.tif'
         img, _, _ = geofiles.read_tif(file)
         img = img[:, :, self.indices]
         return img.astype(np.float32)
+
+    def _get_s2_patch(self, site: str, year: int, season: str, i: int, j: int) -> np.ndarray:
+        img = self._get_s2_img(site, year, season)
+        i_start, i_end = i * 10, (i + 1) * 10
+        j_start, j_end = j * 10, (j + 1) * 10
+        patch = img[i_start:i_end, j_start:j_end, ]
+        return patch
 
     def _get_patch_geo(self, site: str, i: int, j: int) -> tuple:
         file = self.root_path / site / '2016' / f's2_2016_wet_{i:03d}_{j:03d}.tif'
@@ -74,51 +77,42 @@ class AbstractPopDataset(torch.utils.data.Dataset):
 # dataset for urban extraction with building footprints
 class PopDataset(AbstractPopDataset):
 
-    def __init__(self, cfg: experiment_manager.CfgNode, run_type: str, no_augmentations: bool = False,
-                 disable_unlabeled: bool = False):
-        super().__init__(cfg, run_type)
+    def __init__(self, cfg: experiment_manager.CfgNode, run_type: str, no_augmentations: bool = False):
+        super().__init__(cfg)
 
         # handling transformations of data
         self.no_augmentations = no_augmentations
         self.transform = augmentations.compose_transformations(cfg.AUGMENTATION, no_augmentations)
 
         # subset samples
-        self.samples = [s for s in self.samples if not bool(s['isnan'])]
-        if run_type == 'training':
-            self.samples = [s for s in self.samples if s['random'] <= self.cfg.DATALOADER.SPLIT]
-        if run_type == 'validation':
-            self.samples = [s for s in self.samples if s['random'] > self.cfg.DATALOADER.SPLIT]
-
-        # unlabeled data for semi-supervised learning
-        if (cfg.DATALOADER.INCLUDE_UNLABELED):
-            pass
+        self.run_type = run_type
+        self.samples = [s for s in self.samples if not bool(s['isnan']) and s['split'] == run_type]
 
         manager = multiprocessing.Manager()
         self.samples = manager.list(self.samples)
+
+        self.img = self._get_s2_img('kigali', self.year, self.season)
 
         self.length = len(self.samples)
 
     def __getitem__(self, index):
 
         s = self.samples[index]
-        site, year, i, j = s['site'], s['year'], s['i'], s['j']
+        i, j, unit = s['i'], s['j'], s['unit']
 
-        y = s['pop']
+        i_start, i_end = i * 10, (i + 1) * 10
+        j_start, j_end = j * 10, (j + 1) * 10
+        patch = self.img[i_start:i_end, j_start:j_end, ]
+        x = self.transform(patch)
 
-        if self.season == 'wet' or self.season == 'dry':
-            season = self.season
-        else:
-            season = 'wet' if np.random.rand(1) > 0.5 else 'dry'
-        img = self._get_s2_patch(site, year, season, i, j)
-
-        x = self.transform(img)
+        y = s[f'pop{self.year}']
 
         item = {
             'x': x,
             'y': torch.tensor([y]),
-            'site': site,
-            'year': year,
-            'season': season,
+            'year': self.year,
+            'season': self.season,
+            'unit': unit,
             'i': i,
             'j': j,
         }
