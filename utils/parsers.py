@@ -18,7 +18,7 @@ def training_argument_parser():
     return parser
 
 
-def assessment_argument_parser():
+def deployment_argument_parser():
     # https://docs.python.org/3/library/argparse.html#the-add-argument-method
     parser = argparse.ArgumentParser(description="Experiment Args")
 
