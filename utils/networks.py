@@ -64,6 +64,26 @@ class DualStreamPopulationNet(nn.Module):
         return p_fusion, p1, p2
 
 
+class PopulationChangeNet(nn.Module):
+
+    def __init__(self, cfg: experiment_manager.CfgNode):
+        super(PopulationChangeNet, self).__init__()
+        self.net = PopulationNet(cfg)
+        self.net.enable_fc = False
+        n_features = self.net.model.fc.in_features
+        self.change_fc = nn.Linear(n_features, 1)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x_t1: torch.Tensor, x_t2: torch.Tensor) -> tuple:
+        features_t1 = self.net(x_t1)
+        features_t2 = self.net(x_t2)
+        p_t1 = self.relu(self.net.model.fc(features_t1))
+        p_t2 = self.relu(self.net.model.fc(features_t2))
+        features_fusion = features_t2 - features_t1
+        p_change = self.relu(self.change_fc(features_fusion))
+        return p_change, p_t1, p_t2
+
+
 class PopulationNet(nn.Module):
 
     def __init__(self, model_cfg, enable_fc: bool = True):

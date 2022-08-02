@@ -101,9 +101,9 @@ def unit_stats_bitemporal(cfg):
         if i < 2 and j < 2:
             axs[i, j].set_xlim(0, 50_000)
             axs[i, j].set_ylim(0, 50_000)
-            line = ax.plot([0, 50_000], [0, 50_000], c='r', zorder=-1, label='1:1 line')
+            ax.plot([0, 50_000], [0, 50_000], c='r', zorder=-1, label='1:1 line')
         else:
-            line = ax.plot([-1_000, 10_000], [-1_000, 10_000], c='r', zorder=-1, label='1:1 line')
+            ax.plot([-1_000, 10_000], [-1_000, 10_000], c='r', zorder=-1, label='1:1 line')
             axs[i, j].set_xlim(-1_000, 10_000)
             axs[i, j].set_ylim(-1_000, 10_000)
 

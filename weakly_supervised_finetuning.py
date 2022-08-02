@@ -9,40 +9,25 @@ from torch.utils import data as torch_data
 import wandb
 import numpy as np
 
-from utils import networks, datasets, loss_functions, evaluation, experiment_manager, parsers
+from utils import networks, datasets, loss_functions, evaluation, experiment_manager, parsers, dataset_helpers
 
 
 def run_training(cfg):
-    net = networks.PopulationNet(cfg.MODEL)
+    net = networks.PopulationChangeNet(cfg.MODEL)
     net.to(device)
 
     optimizer = optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
 
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
-    # reset the generators
-    dataset = datasets.PopDataset(cfg=cfg, run_type='training')
-    print(dataset)
-
-    dataloader_kwargs = {
-        'batch_size': cfg.TRAINER.BATCH_SIZE,
-        'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
-        'shuffle': cfg.DATALOADER.SHUFFLE,
-        'drop_last': True,
-        'pin_memory': True,
-    }
-    dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
-
     # unpacking cfg
     epochs = cfg.TRAINER.EPOCHS
     save_checkpoints = cfg.SAVE_CHECKPOINTS
-    steps_per_epoch = len(dataloader)
+
+    training_units = dataset_helpers.get_units(cfg.PATHS.DATASET, 'training')
 
     # tracking variables
     global_step = epoch_float = 0
-
-    evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
-    evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
 
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
@@ -50,14 +35,29 @@ def run_training(cfg):
         start = timeit.default_timer()
         loss_set, pop_set = [], []
 
-        for i, batch in enumerate(dataloader):
+        for training_unit in training_units:
+            dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(training_unit))
+            print(training_unit, len(dataset))
 
-            net.train()
-            optimizer.zero_grad()
+            dataloader_kwargs = {
+                'batch_size': cfg.TRAINER.BATCH_SIZE,
+                'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
+                'shuffle': cfg.DATALOADER.SHUFFLE,
+                'drop_last': False,
+                'pin_memory': True,
+            }
+            dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
+            pred_change_tot, pred_t1_tot, pred_t2_tot = 0, 0, 0
 
-            x = batch['x'].to(device)
-            y_gts = batch['y'].to(device)
-            y_pred = net(x)
+            for i, batch in enumerate(dataloader):
+
+                net.train()
+                optimizer.zero_grad()
+
+                x_t1 = batch['x_t1'].to(device)
+                x_t2 = batch['x_t2'].to(device)
+                pred_change, pred_t1, pred_t2 = net(x_t1, x_t2)
+
 
             loss = criterion(y_pred, y_gts.float())
             loss.backward()
@@ -85,7 +85,7 @@ def run_training(cfg):
                 })
                 start = timeit.default_timer()
                 loss_set = []
-            # end of batch
+            # end of unit
 
         assert (epoch == epoch_float)
         print(f'epoch float {epoch_float} (step {global_step}) - epoch {epoch}')
