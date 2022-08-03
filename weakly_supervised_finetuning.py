@@ -47,7 +47,6 @@ def run_training(cfg):
                 'pin_memory': True,
             }
             dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
-            pred_change_tot, pred_t1_tot, pred_t2_tot = 0, 0, 0
 
             for i, batch in enumerate(dataloader):
 
