@@ -50,7 +50,7 @@ def run_training(cfg):
             print(training_unit, len(dataset))
 
             dataloader_kwargs = {
-                'batch_size': cfg.TRAINER.BATCH_SIZE,
+                'batch_size': len(dataset),
                 'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
                 'shuffle': cfg.DATALOADER.SHUFFLE,
                 'drop_last': False,
