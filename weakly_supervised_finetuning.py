@@ -29,11 +29,14 @@ def run_training(cfg):
     # tracking variables
     global_step = epoch_float = 0
 
+    evaluation.model_evaluation_units(net, cfg, 'training', epoch_float, global_step)
+    evaluation.model_evaluation_units(net, cfg, 'test', epoch_float, global_step)
+
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
 
         start = timeit.default_timer()
-        loss_set, loss_set_change, loss_set_pop_t1, loss_set_pop_t2 = [], [], [], []
+        loss_set, loss_set_change, loss_set_t1, loss_set_t2 = [], [], [], []
 
         for training_unit in training_units:
             dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(training_unit))
@@ -59,7 +62,7 @@ def run_training(cfg):
                 pred_change, pred_t1, pred_t2 = net(x_t1, x_t2)
 
             y = dataset.get_label()
-            y_change, y_t1, y_t2 = y['y_diff'].to(device), y['y_t1'].to(device), y['y_t2'].to(devce)
+            y_change, y_t1, y_t2 = y['y_diff'].to(device), y['y_t1'].to(device), y['y_t2'].to(device)
             pred_change = torch.sum(pred_change, dim=0)
             pred_t1 = torch.sum(pred_t1, dim=0)
             pred_t2 = torch.sum(pred_t2, dim=0)
@@ -67,18 +70,16 @@ def run_training(cfg):
             loss_change = criterion(pred_change, y_change.float())
             loss_t1 = criterion(pred_t1, y_t1.float())
             loss_t2 = criterion(pred_t2, y_t2.float())
-            loss = loss_change, loss_t1, loss_t2
+            loss = loss_change + loss_t1 + loss_t2
             loss.backward()
             optimizer.step()
 
-            loss_change_set.append(loss_change.item())
-            loss_set_pop_t1.append(loss_set_pop_t1.item())
-            loss_set_pop_t2.append(loss_set_pop_t2.item())
+            loss_set_change.append(loss_change.item())
+            loss_set_t1.append(loss_t1.item())
+            loss_set_t2.append(loss_t2.item())
             loss_set.append(loss.item())
 
-
             global_step += 1
-            epoch_float = global_step / steps_per_epoch
 
             if global_step % cfg.LOGGING.FREQUENCY == 0:
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
@@ -90,15 +91,15 @@ def run_training(cfg):
                 time = timeit.default_timer() - start
                 wandb.log({
                     'loss_diff': np.mean(loss_set_change),
-                    'loss_pop_t1': np.mean(loss_set_pop_t1),
-                    'loss_pop_t2': np.mean(loss_set_pop_t2),
+                    'loss_pop_t1': np.mean(loss_set_t1),
+                    'loss_pop_t2': np.mean(loss_set_t2),
                     'loss': np.mean(loss_set),
                     'time': time,
                     'step': global_step,
                     'epoch': epoch_float,
                 })
                 start = timeit.default_timer()
-                loss_set, loss_set_change, loss_set_pop_t1, loss_set_pop_t2 = [], [], [], []
+                loss_set, loss_set_change, loss_set_t1, loss_set_t2 = [], [], [], []
             # end of unit
 
         assert (epoch == epoch_float)

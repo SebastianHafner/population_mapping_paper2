@@ -169,8 +169,8 @@ class BitemporalCensusUnitDataset(AbstractPopDataset):
         return item
 
     def get_label(self) -> dict:
-        pop_t1 = self.get_unit_pop(self.unit_nr, self.t1)
-        pop_t2 = self.get_unit_pop(self.unit_nr, self.t2)
+        pop_t1 = self._get_unit_pop(self.unit_nr, self.t1)
+        pop_t2 = self._get_unit_pop(self.unit_nr, self.t2)
         diff = self._get_unit_popgrowth(self.unit_nr)
 
         label = {
