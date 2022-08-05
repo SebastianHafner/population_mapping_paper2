@@ -111,9 +111,11 @@ def model_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_ma
     # assessment
     for measurer, name in zip([measurer_change, measurer_t1, measurer_t2], ['diff', 'pop_t1', 'pop_t2']):
         rmse = measurer.root_mean_square_error()
+        r2 = measurer.r_square()
         print(f'RMSE {run_type} {name} {rmse:.3f}')
         wandb.log({
             f'{run_type} {name} rmse': rmse,
+            f'{run_type} {name} r2': r2,
             'step': step,
             'epoch': epoch,
         })

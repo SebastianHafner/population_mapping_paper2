@@ -13,6 +13,11 @@ TRAINER:
   EPOCHS: 10
   OPTIMIZER: 'adamw'
 
+PRETRAINING:
+  ENABLED: True
+  CFG_NAME: 'wet2020'
+  EPOCH: 10
+
 MODEL:
   TYPE: 'resnet'
   SIZE: 18

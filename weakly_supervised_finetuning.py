@@ -13,8 +13,15 @@ from utils import networks, datasets, loss_functions, evaluation, experiment_man
 
 
 def run_training(cfg):
+    cfg.MODEL.OUTPUT_PATH = cfg.PATHS.OUTPUT_PATH
     net = networks.PopulationChangeNet(cfg.MODEL)
     net.to(device)
+
+    if cfg.PRETRAINING.ENABLED:
+        # TODO: load optimizer parameters for pretrained network part
+        pretrained_weights = networks.load_weights_finetuning(cfg.PATHS.OUTPUT_PATH, cfg.PRETRAINING.CFG_NAME,
+                                                              cfg.PRETRAINING.EPOCH, device)
+        net.encoder.load_state_dict(pretrained_weights)
 
     optimizer = optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
 
