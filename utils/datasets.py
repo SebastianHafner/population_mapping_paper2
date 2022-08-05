@@ -174,9 +174,9 @@ class BitemporalCensusUnitDataset(AbstractPopDataset):
         diff = self._get_unit_popgrowth(self.unit_nr)
 
         label = {
-            'y_t1': pop_t1,
-            'y_t2': pop_t2,
-            'y_diff': diff,
+            'y_t1': torch.tensor([pop_t1]),
+            'y_t2': torch.tensor([pop_t2]),
+            'y_diff': torch.tensor([diff]),
         }
 
         return label

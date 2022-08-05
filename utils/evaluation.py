@@ -69,3 +69,53 @@ def model_evaluation(net: networks.PopulationNet, cfg: experiment_manager.CfgNod
         'step': step,
         'epoch': epoch,
     })
+
+
+def model_evaluation_unit(net: networks.PopulationChangeNet, cfg: experiment_manager.CfgNode, run_type: str,
+                          epoch: float, step: int):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    net.to(device)
+    net.eval()
+
+    measurer_change = RegressionEvaluation()
+    measurer_t1 = RegressionEvaluation()
+    measurer_t2 = RegressionEvaluation()
+
+    for training_unit in training_units:
+        dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(training_unit))
+        dataloader_kwargs = {
+            'batch_size': cfg.TRAINER.BATCH_SIZE,
+            'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
+            'shuffle': cfg.DATALOADER.SHUFFLE,
+            'drop_last': False,
+            'pin_memory': True,
+        }
+        dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
+        pred_change = pred_t1 = pred_t2 = 0
+
+        for i, batch in enumerate(dataloader):
+            net.train()
+            optimizer.zero_grad()
+
+            x_t1 = batch['x_t1'].to(device)
+            x_t2 = batch['x_t2'].to(device)
+            pred_change, pred_t1, pred_t2 = net(x_t1, x_t2)
+
+        y = dataset.get_label()
+        y_change, y_t1, y_t2 = y['y_diff'].to(device), y['y_t1'].to(device), y['y_t2'].to(devce)
+        pred_change = torch.sum(pred_change, dim=0)
+        pred_t1 = torch.sum(pred_t1, dim=0)
+        pred_t2 = torch.sum(pred_t2, dim=0)
+        measurer_change.add_sample_torch(pred_change, y_change)
+        measurer_t1.add_sample_torch(pred_t1, y_t1)
+        measurer_t2.add_sample_torch(pred_t2, y_t2)
+
+    # assessment
+    for measurer, name in zip([measurer_change, measurer_t1, measurer_t2], ['diff', 'pop_t1', 'pop_t2']):
+        rmse = measurer.root_mean_square_error()
+        print(f'RMSE {run_type} {name} {rmse:.3f}')
+        wandb.log({
+            f'{run_type} {name} rmse': rmse,
+            'step': step,
+            'epoch': epoch,
+        })

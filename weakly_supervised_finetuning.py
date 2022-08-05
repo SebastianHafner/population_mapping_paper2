@@ -33,7 +33,7 @@ def run_training(cfg):
         print(f'Starting epoch {epoch}/{epochs}.')
 
         start = timeit.default_timer()
-        loss_set, pop_set = [], []
+        loss_set, loss_set_change, loss_set_pop_t1, loss_set_pop_t2 = [], [], [], []
 
         for training_unit in training_units:
             dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(training_unit))
@@ -47,6 +47,7 @@ def run_training(cfg):
                 'pin_memory': True,
             }
             dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
+            pred_change = pred_t1 = pred_t2 = 0
 
             for i, batch in enumerate(dataloader):
 
@@ -57,13 +58,24 @@ def run_training(cfg):
                 x_t2 = batch['x_t2'].to(device)
                 pred_change, pred_t1, pred_t2 = net(x_t1, x_t2)
 
+            y = dataset.get_label()
+            y_change, y_t1, y_t2 = y['y_diff'].to(device), y['y_t1'].to(device), y['y_t2'].to(devce)
+            pred_change = torch.sum(pred_change, dim=0)
+            pred_t1 = torch.sum(pred_t1, dim=0)
+            pred_t2 = torch.sum(pred_t2, dim=0)
 
-            loss = criterion(y_pred, y_gts.float())
+            loss_change = criterion(pred_change, y_change.float())
+            loss_t1 = criterion(pred_t1, y_t1.float())
+            loss_t2 = criterion(pred_t2, y_t2.float())
+            loss = loss_change, loss_t1, loss_t2
             loss.backward()
             optimizer.step()
 
+            loss_change_set.append(loss_change.item())
+            loss_set_pop_t1.append(loss_set_pop_t1.item())
+            loss_set_pop_t2.append(loss_set_pop_t2.item())
             loss_set.append(loss.item())
-            pop_set.append(y_gts.flatten())
+
 
             global_step += 1
             epoch_float = global_step / steps_per_epoch
@@ -71,26 +83,29 @@ def run_training(cfg):
             if global_step % cfg.LOGGING.FREQUENCY == 0:
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
                 # evaluation on sample of training and validation set
-                evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
-                evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
+                evaluation.model_evaluation_units(net, cfg, 'training', epoch_float, global_step)
+                evaluation.model_evaluation_units(net, cfg, 'test', epoch_float, global_step)
 
                 # logging
                 time = timeit.default_timer() - start
                 wandb.log({
+                    'loss_diff': np.mean(loss_set_change),
+                    'loss_pop_t1': np.mean(loss_set_pop_t1),
+                    'loss_pop_t2': np.mean(loss_set_pop_t2),
                     'loss': np.mean(loss_set),
                     'time': time,
                     'step': global_step,
                     'epoch': epoch_float,
                 })
                 start = timeit.default_timer()
-                loss_set = []
+                loss_set, loss_set_change, loss_set_pop_t1, loss_set_pop_t2 = [], [], [], []
             # end of unit
 
         assert (epoch == epoch_float)
         print(f'epoch float {epoch_float} (step {global_step}) - epoch {epoch}')
         # evaluation at the end of an epoch
-        evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step)
-        evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
+        evaluation.model_evaluation_units(net, cfg, 'training', epoch_float, global_step)
+        evaluation.model_evaluation_units(net, cfg, 'test', epoch_float, global_step)
 
         if epoch in save_checkpoints and not cfg.DEBUG:
             print(f'saving network', flush=True)
