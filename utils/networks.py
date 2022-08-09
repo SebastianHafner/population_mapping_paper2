@@ -83,8 +83,8 @@ class PopulationChangeNet(nn.Module):
         self.relu = torch.nn.ReLU()
 
     def forward(self, x_t1: torch.Tensor, x_t2: torch.Tensor) -> tuple:
-        features_t1 = self.net(x_t1)
-        features_t2 = self.net(x_t2)
+        features_t1 = self.encoder(x_t1)
+        features_t2 = self.encoder(x_t2)
         p_t1 = self.relu(self.encoder.model.fc(features_t1))
         p_t2 = self.relu(self.encoder.model.fc(features_t2))
         features_fusion = features_t2 - features_t1

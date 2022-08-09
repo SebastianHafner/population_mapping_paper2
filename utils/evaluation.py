@@ -82,31 +82,32 @@ def model_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_ma
     measurer_t2 = RegressionEvaluation()
 
     units = dataset_helpers.get_units(cfg.PATHS.DATASET, run_type)
-    for unit in units:
-        dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(unit))
-        dataloader_kwargs = {
-            'batch_size': cfg.TRAINER.BATCH_SIZE,
-            'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
-            'shuffle': cfg.DATALOADER.SHUFFLE,
-            'drop_last': False,
-            'pin_memory': True,
-        }
-        dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
-        pred_change = pred_t1 = pred_t2 = 0
+    with torch.no_grad():
+        for unit in units:
+            dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(unit))
+            dataloader_kwargs = {
+                'batch_size': cfg.TRAINER.BATCH_SIZE,
+                'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
+                'shuffle': cfg.DATALOADER.SHUFFLE,
+                'drop_last': False,
+                'pin_memory': True,
+            }
+            dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
+            pred_change = pred_t1 = pred_t2 = 0
 
-        for i, batch in enumerate(dataloader):
-            x_t1 = batch['x_t1'].to(device)
-            x_t2 = batch['x_t2'].to(device)
-            pred_change, pred_t1, pred_t2 = net(x_t1, x_t2)
+            for i, batch in enumerate(dataloader):
+                x_t1 = batch['x_t1'].to(device)
+                x_t2 = batch['x_t2'].to(device)
+                pred_change, pred_t1, pred_t2 = net(x_t1, x_t2)
 
-        y = dataset.get_label()
-        y_change, y_t1, y_t2 = y['y_diff'].to(device), y['y_t1'].to(device), y['y_t2'].to(device)
-        pred_change = torch.sum(pred_change, dim=0)
-        pred_t1 = torch.sum(pred_t1, dim=0)
-        pred_t2 = torch.sum(pred_t2, dim=0)
-        measurer_change.add_sample_torch(pred_change, y_change)
-        measurer_t1.add_sample_torch(pred_t1, y_t1)
-        measurer_t2.add_sample_torch(pred_t2, y_t2)
+            y = dataset.get_label()
+            y_change, y_t1, y_t2 = y['y_diff'].to(device), y['y_t1'].to(device), y['y_t2'].to(device)
+            pred_change = torch.sum(pred_change, dim=0)
+            pred_t1 = torch.sum(pred_t1, dim=0)
+            pred_t2 = torch.sum(pred_t2, dim=0)
+            measurer_change.add_sample_torch(pred_change, y_change)
+            measurer_t1.add_sample_torch(pred_t1, y_t1)
+            measurer_t2.add_sample_torch(pred_t2, y_t2)
 
     # assessment
     for measurer, name in zip([measurer_change, measurer_t1, measurer_t2], ['diff', 'pop_t1', 'pop_t2']):
