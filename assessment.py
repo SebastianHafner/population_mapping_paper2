@@ -81,13 +81,6 @@ def unit_stats_bitemporal(cfg):
         # difference
         gt_diff = np.array(fig_data[split]['gt']['2020']) - np.array(fig_data[split]['gt']['2016'])
         pred_diff = np.array(fig_data[split]['pred']['2020']) - np.array(fig_data[split]['pred']['2016'])
-        print(split)
-        print('Ground Truth')
-        print(gt_diff)
-        print(np.sum(gt_diff))
-        print('Predicted')
-        print(pred_diff)
-        print(np.sum(pred_diff))
         axs[i, 2].scatter(gt_diff, pred_diff)
         _, _, r_value, *_ = stats.linregress(gt_diff, pred_diff)
         textstr = r'$R^2 = {r_value:.2f}$'.format(r_value=r_value)
@@ -117,7 +110,6 @@ def unit_stats_bitemporal(cfg):
     cols = ['Population 2016', 'Population 2020', 'Difference']
     rows = ['Training', 'Test']
 
-
     pad = 5  # in points
 
     for ax, col in zip(axs[0], cols):
@@ -131,12 +123,9 @@ def unit_stats_bitemporal(cfg):
                     size='large', ha='right', va='center')
 
     fig.tight_layout()
-    # tight_layout doesn't take these labels into account. We'll need
-    # to make some room. These numbers are are manually tweaked.
-    # You could automatically calculate them, but it's a pain.
     fig.subplots_adjust(left=0.15, top=0.95)
 
-    file = Path(cfg.PATHS.OUTPUT) / 'plots' / 'test.png'
+    file = Path(cfg.PATHS.OUTPUT) / 'plots' / f'{cfg.NAME}.png'
     plt.savefig(file, dpi=300, bbox_inches='tight')
     plt.show()
 
