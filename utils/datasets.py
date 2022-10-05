@@ -9,12 +9,13 @@ from affine import Affine
 
 class AbstractPopDataset(torch.utils.data.Dataset):
 
-    def __init__(self, cfg: experiment_manager.CfgNode):
+    def __init__(self, cfg: experiment_manager.CfgNode, unit_nr: int = None):
         super().__init__()
         self.cfg = cfg
         self.root_path = Path(cfg.PATHS.DATASET)
-        metadata_file = self.root_path / 'metadata.json'
-        self.metadata = geofiles.load_json(metadata_file)
+        self.unit_nr = unit_nr
+        metadata_fname = 'metadata.json' if unit_nr is None else f'metadata_unit{unit_nr}.json'
+        self.metadata = geofiles.load_json(self.root_path / metadata_fname)
         self.samples = self.metadata['samples']
         self.indices = [['B2', 'B3', 'B4', 'B8'].index(band) for band in cfg.DATALOADER.SPECTRAL_BANDS]
         self.year = cfg.DATALOADER.YEAR
@@ -93,7 +94,6 @@ class PopDataset(AbstractPopDataset):
         self.length = len(self.samples)
 
     def __getitem__(self, index):
-
         s = self.samples[index]
         i, j, unit = s['i'], s['j'], s['unit']
 
@@ -127,15 +127,11 @@ class PopDataset(AbstractPopDataset):
 class BitemporalCensusUnitDataset(AbstractPopDataset):
 
     def __init__(self, cfg: experiment_manager.CfgNode, unit_nr: int, no_augmentations: bool = False):
-        super().__init__(cfg)
+        super().__init__(cfg, unit_nr)
 
         # handling transformations of data
         self.no_augmentations = no_augmentations
         self.transform = augmentations.compose_transformations(cfg.AUGMENTATION, no_augmentations)
-
-        # subset samples
-        self.unit_nr = unit_nr
-        self.samples = [s for s in self.samples if s['unit'] == unit_nr]
 
         manager = multiprocessing.Manager()
         self.samples = manager.list(self.samples)

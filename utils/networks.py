@@ -18,8 +18,8 @@ def save_checkpoint(network, optimizer, epoch, step, cfg: experiment_manager.Cfg
     torch.save(checkpoint, save_file)
 
 
-def load_checkpoint(epoch, cfg: experiment_manager.CfgNode, device, ):
-    net = PopulationNet(cfg.MODEL)
+def load_checkpoint(epoch, cfg: experiment_manager.CfgNode, device, change_net: bool = False):
+    net = PopulationNet(cfg.MODEL) if not change_net else PopulationChangeNet(cfg.MODEL)
     net.to(device)
 
     save_file = Path(cfg.PATHS.OUTPUT) / 'networks' / f'{cfg.NAME}_checkpoint{epoch}.pt'
@@ -72,6 +72,26 @@ class DualStreamPopulationNet(nn.Module):
         return p_fusion, p1, p2
 
 
+class PopulationDualTaskNet(nn.Module):
+
+    def __init__(self, model_cfg: experiment_manager.CfgNode):
+        super(PopulationDualTaskNet, self).__init__()
+        self.encoder = PopulationNet(model_cfg)
+        self.encoder.enable_fc = False
+        n_features = self.encoder.model.fc.in_features
+        self.change_fc = nn.Linear(n_features, 1)
+        self.relu = torch.nn.ReLU()
+
+    def forward(self, x_t1: torch.Tensor, x_t2: torch.Tensor) -> tuple:
+        features_t1 = self.encoder(x_t1)
+        features_t2 = self.encoder(x_t2)
+        p_t1 = self.relu(self.encoder.model.fc(features_t1))
+        p_t2 = self.relu(self.encoder.model.fc(features_t2))
+        features_fusion = features_t2 - features_t1
+        p_change = self.change_fc(features_fusion)
+        return p_change, p_t1, p_t2
+
+
 class PopulationChangeNet(nn.Module):
 
     def __init__(self, model_cfg: experiment_manager.CfgNode):
@@ -85,11 +105,9 @@ class PopulationChangeNet(nn.Module):
     def forward(self, x_t1: torch.Tensor, x_t2: torch.Tensor) -> tuple:
         features_t1 = self.encoder(x_t1)
         features_t2 = self.encoder(x_t2)
-        p_t1 = self.relu(self.encoder.model.fc(features_t1))
-        p_t2 = self.relu(self.encoder.model.fc(features_t2))
         features_fusion = features_t2 - features_t1
-        p_change = self.relu(self.change_fc(features_fusion))
-        return p_change, p_t1, p_t2
+        p_change = self.change_fc(features_fusion)
+        return p_change
 
 
 class PopulationNet(nn.Module):
@@ -201,6 +219,14 @@ class EMA(nn.Module):
 
     def get_model(self):
         return self.model
+
+
+class Identity(nn.Module):
+    def __init__(self):
+        super(Identity, self).__init__()
+
+    def forward(self, x):
+        return x
 
 
 if __name__ == '__main__':
