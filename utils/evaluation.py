@@ -85,11 +85,11 @@ def model_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_ma
     units = dataset_helpers.get_units(cfg.PATHS.DATASET, run_type)
 
     for i_unit, unit in enumerate(units):
-        dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(unit))
+        dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(unit), no_augmentations=True)
         dataloader_kwargs = {
             'batch_size': cfg.TRAINER.BATCH_SIZE,
             'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
-            'shuffle': cfg.DATALOADER.SHUFFLE,
+            'shuffle': False,
             'drop_last': False,
             'pin_memory': True,
         }
@@ -112,15 +112,17 @@ def model_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_ma
         measurer_t2.add_sample_torch(pred_t2, y_t2)
 
         unit_str = f'{i_unit + 1:03d}/{len(units)}: Unit {unit} ({len(dataset)})'
-        results_str = f'{pred_change.cpu().item():.0f}; GT: {y_change.cpu().item():.0f}'
-        sys.stdout.write("\r%s" % f'Eval ({run_type})' + unit_str + ' ' + results_str)
+        results_str = f'Pred: {pred_change.cpu().item():.0f}; GT: {y_change.cpu().item():.0f}'
+        sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + unit_str + ' ' + results_str)
         sys.stdout.flush()
+
+        # if i_unit:
+        #     break
 
     # assessment
     for measurer, name in zip([measurer_change, measurer_t1, measurer_t2], ['diff', 'pop_t1', 'pop_t2']):
         rmse = measurer.root_mean_square_error()
         r2 = measurer.r_square()
-        print(f'RMSE {run_type} {name} {rmse:.3f}')
         wandb.log({
             f'{run_type} {name} rmse': rmse,
             f'{run_type} {name} r2': r2,
@@ -130,5 +132,5 @@ def model_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_ma
 
         if name == 'diff':
             eval_str = f'RMSE: {rmse:.0f}; R2: {r2:.2f}'
-            sys.stdout.write("\r%s" % f'Eva ({run_type}) ' + eval_str)
+            sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + eval_str + '\n')
             sys.stdout.flush()

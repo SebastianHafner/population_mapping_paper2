@@ -46,11 +46,16 @@ def run_training(cfg):
         # evaluation.model_evaluation_units(net, cfg, 'training', epoch_float, global_step)
         evaluation.model_evaluation_units(net, cfg, 'test', epoch_float, global_step)
 
+    # dummy_tensor = torch.rand((2, 4, 10, 10)).to(device)
+    # with torch.no_grad():
+    #     a, b, c = net(dummy_tensor, dummy_tensor)
+    #     print(f'{torch.sum(a).cpu().item():.5f} - {torch.sum(b).cpu().item():.5f} - {torch.sum(c).cpu().item():.5f}')
+
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
 
         start = timeit.default_timer()
-        loss_set, pred_set, gt_set = [], [], []
+        loss_set = []
 
         np.random.shuffle(training_units)
         for i_unit, training_unit in enumerate(training_units):
@@ -79,31 +84,34 @@ def run_training(cfg):
                 # need to be detached for backprop to work
                 pred_pop_t1.detach(), pred_pop_t2.detach()
 
-                gt_set.append(y_change.cpu().item())
                 pred_change = torch.sum(pred_change, dim=0)
-                pred_set.append(pred_change.cpu().item())
 
                 unit_str = f'{i_unit + 1:03d}/{len(training_units)}: Unit {training_unit} ({len(dataset)})'
                 results_str = f'Pred: {pred_change.cpu().item():.0f}; GT: {y_change.cpu().item():.0f}'
-                sys.stdout.write("\r%s" % 'Train' + unit_str + ' ' + results_str)
+                sys.stdout.write("\r%s" % 'Train' + ' ' + unit_str + ' ' + results_str)
                 sys.stdout.flush()
 
                 loss = criterion(pred_change, y_change.float())
                 loss.backward()
                 optimizer.step()
 
+                # with torch.no_grad():
+                #     a, b, c = net(dummy_tensor, dummy_tensor)
+                #     print(
+                #         f'{torch.sum(a).cpu().item():.5f} - {torch.sum(b).cpu().item():.5f} - {torch.sum(c).cpu().item():.5f}')
+
                 loss_set.append(loss.item())
 
                 global_step += 1
                 epoch_float = global_step / steps_per_epoch
+            # if i_unit == 5:
+            #     break
             # end of unit (step)
-            break
 
         # assert (epoch == epoch_float)
 
-        epoch_str = f'Train - Pred: {np.sum(pred_set):.0f}; GT: {np.sum(gt_set):.0f}'
-        sys.stdout.write("\r%s" % epoch_str)
-        sys.stdout.write('\n')
+        epoch_str = f'Train Loss - {np.mean(loss_set):.0f}'
+        sys.stdout.write("\r%s" % epoch_str + '\n')
         sys.stdout.flush()
 
         # logging at the end of each epoch
@@ -123,7 +131,7 @@ def run_training(cfg):
             print(f'saving network', flush=True)
             networks.save_checkpoint(net, optimizer, epoch, global_step, cfg)
 
-        loss_set, pred_set, gt_set = [], [], []
+        loss_set = []
 
 
 if __name__ == '__main__':
