@@ -12,7 +12,7 @@ TRAINER:
 CHANGE_DETECTION:
   PRETRAINING:
     ENABLED: True
-    CFG_NAME: 'wet2020robust'
+    CFG_NAME: 'dry2020robust'
     EPOCH: 10
     FREEZE_ENCODER: True
 
