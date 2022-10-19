@@ -156,5 +156,9 @@ def produce_unit_stats_finetuned(cfg: experiment_manager.CfgNode):
 if __name__ == '__main__':
     args = parsers.deployment_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
-    # produce_unit_stats_finetuned(cfg)
-    produce_population_grids_finetuned(cfg)
+    if not cfg.CHANGE_DETECTION.ENDTOEND:
+        produce_unit_stats(cfg)
+        produce_population_grids(cfg)
+    else:
+        produce_unit_stats_finetuned(cfg)
+        produce_population_grids_finetuned(cfg)

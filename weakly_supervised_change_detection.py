@@ -41,9 +41,8 @@ def run_training(cfg):
     # tracking variables
     global_step = epoch_float = 0
     steps_per_epoch = len(training_units)
-
     if not cfg.DEBUG:
-        # evaluation.model_change_evaluation_units(net, cfg, 'training', epoch_float, global_step)
+        evaluation.model_change_evaluation_units(net, cfg, 'training', epoch_float, global_step)
         evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step)
 
     # dummy_tensor = torch.rand((2, 4, 10, 10)).to(device)
@@ -115,7 +114,7 @@ def run_training(cfg):
         sys.stdout.flush()
 
         # logging at the end of each epoch
-        # evaluation.model_change_evaluation_units(net, cfg, 'training', epoch_float, global_step)
+        evaluation.model_change_evaluation_units(net, cfg, 'training', epoch_float, global_step)
         evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step)
 
         # logging

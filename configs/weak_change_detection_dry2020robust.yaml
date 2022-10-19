@@ -10,6 +10,7 @@ TRAINER:
   OPTIMIZER: 'adamw'
 
 CHANGE_DETECTION:
+  ENDTOEND: True
   PRETRAINING:
     ENABLED: True
     CFG_NAME: 'dry2020robust'
