@@ -42,8 +42,9 @@ def run_training(cfg):
     # tracking variables
     global_step = epoch_float = 0
 
-    evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
-    evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
+    # early stopping
+    best_f1_val, trigger_times = 0, 0
+    stop_training = False
 
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
@@ -72,10 +73,6 @@ def run_training(cfg):
 
             if global_step % cfg.LOGGING.FREQUENCY == 0:
                 print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
-                # evaluation on sample of training and validation set
-                evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
-                evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step, cfg.LOGGING.MAX_SAMPLES)
-
                 # logging
                 time = timeit.default_timer() - start
                 wandb.log({
@@ -91,12 +88,29 @@ def run_training(cfg):
         assert (epoch == epoch_float)
         print(f'epoch float {epoch_float} (step {global_step}) - epoch {epoch}')
         # evaluation at the end of an epoch
-        evaluation.model_evaluation(net, cfg, 'training', epoch_float, global_step)
-        evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
+        _ = evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step)
+        f1_val = evaluation.model_evaluation(net, cfg, 'val', epoch_float, global_step)
 
-        if epoch in save_checkpoints and not cfg.DEBUG:
-            print(f'saving network', flush=True)
-            networks.save_checkpoint(net, optimizer, epoch, global_step, cfg)
+        if f1_val <= best_f1_val:
+            trigger_times += 1
+            if trigger_times > cfg.TRAINER.PATIENCE:
+                stop_training = True
+        else:
+            best_f1_val = f1_val
+            wandb.log({
+                'best val change F1': best_f1_val,
+                'step': global_step,
+                'epoch': epoch_float,
+            })
+            print(f'saving network (F1 {f1_val:.3f})', flush=True)
+            networks.save_checkpoint(net, optimizer, epoch, cfg)
+            trigger_times = 0
+
+        if stop_training:
+            break  # end of training by early stopping
+
+    net, *_ = networks.load_checkpoint(cfg, device)
+    _ = evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
 
 
 if __name__ == '__main__':
@@ -113,14 +127,14 @@ if __name__ == '__main__':
 
     print('=== Runnning on device: p', device)
 
-    wandb.init(
-        name=cfg.NAME,
-        config=cfg,
-        entity='population_mapping',
-        project='paper2_debug',
-        tags=['population', ],
-        mode='online' if not cfg.DEBUG else 'disabled',
-    )
+    # wandb.init(
+    #     name=cfg.NAME,
+    #     config=cfg,
+    #     entity='population_mapping',
+    #     project='paper2_debug',
+    #     tags=['population', ],
+    #     mode='online' if not cfg.DEBUG else 'disabled',
+    # )
 
     try:
         run_training(cfg)
