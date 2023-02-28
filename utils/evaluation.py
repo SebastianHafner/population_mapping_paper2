@@ -71,6 +71,8 @@ def model_evaluation(net: networks.PopulationNet, cfg: experiment_manager.CfgNod
         'epoch': epoch,
     })
 
+    return rmse
+
 
 def model_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_manager.CfgNode, run_type: str,
                            epoch: float, step: int):
