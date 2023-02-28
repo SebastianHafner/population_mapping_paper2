@@ -169,9 +169,9 @@ def unit_stats_change(cfg, split: str = 'test'):
 
     ax.scatter(gt_diff, pred_diff, s=10)
     rmse = mean_squared_error(gt_diff, pred_diff, squared=False)
-    ax.text(0.05, 0.95, rf'RMSE $= {rmse:.2f}$', transform=ax.transAxes, verticalalignment='top')
+    ax.text(0.05, 0.95, rf'RMSE $= {rmse:.0f}$', transform=ax.transAxes, verticalalignment='top')
     mae = mean_absolute_error(gt_diff, pred_diff)
-    ax.text(0.05, 0.88, rf'MAE $= {mae:.2f}$', transform=ax.transAxes, verticalalignment='top')
+    ax.text(0.05, 0.88, rf'MAE $= {mae:.0f}$', transform=ax.transAxes, verticalalignment='top')
     _, _, r_value, *_ = stats.linregress(gt_diff, pred_diff)
     ax.text(0.05, 0.81, rf'R$^2 = {r_value:.2f}$', transform=ax.transAxes, verticalalignment='top')
 
@@ -288,8 +288,8 @@ def produce_census_maps(cfg):
 if __name__ == '__main__':
     args = parsers.deployment_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
-    # unit_stats_change(cfg)
+    unit_stats_change(cfg)
     # produce_census_maps(cfg)
     # print_quantitative_results(cfg)
-    print_quantitative_results_grid(cfg)
+    # print_quantitative_results_grid(cfg)
     # total_population(cfg, run_type=args.run_type)

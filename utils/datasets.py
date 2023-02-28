@@ -14,8 +14,7 @@ class AbstractPopDataset(torch.utils.data.Dataset):
         self.cfg = cfg
         self.root_path = Path(cfg.PATHS.DATASET)
         self.unit_nr = unit_nr
-        metadata_fname = 'metadata.json' if unit_nr is None else f'metadata_unit{unit_nr}.json'
-        self.metadata = geofiles.load_json(self.root_path / metadata_fname)
+        self.metadata = geofiles.load_json(self.root_path / 'metadata.json')
         self.samples = self.metadata['samples']
         self.indices = [['B2', 'B3', 'B4', 'B8'].index(band) for band in cfg.DATALOADER.SPECTRAL_BANDS]
         self.year = cfg.DATALOADER.YEAR
@@ -84,7 +83,9 @@ class PopDataset(AbstractPopDataset):
 
         # subset samples
         self.run_type = run_type
-        self.samples = [s for s in self.samples if not bool(s['isnan']) and s['split'] == run_type]
+        self.samples = []
+        for unit in self.metadata['sets'][run_type]:
+            self.samples.extend(self.metadata['samples'][str(unit)])
 
         manager = multiprocessing.Manager()
         self.samples = manager.list(self.samples)

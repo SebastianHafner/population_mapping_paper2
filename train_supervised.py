@@ -22,7 +22,7 @@ def run_training(cfg):
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
     # reset the generators
-    dataset = datasets.PopDataset(cfg=cfg, run_type='training')
+    dataset = datasets.PopDataset(cfg=cfg, run_type='train')
     print(dataset)
 
     dataloader_kwargs = {
@@ -36,7 +36,6 @@ def run_training(cfg):
 
     # unpacking cfg
     epochs = cfg.TRAINER.EPOCHS
-    save_checkpoints = cfg.SAVE_CHECKPOINTS
     steps_per_epoch = len(dataloader)
 
     # tracking variables
@@ -127,14 +126,14 @@ if __name__ == '__main__':
 
     print('=== Runnning on device: p', device)
 
-    # wandb.init(
-    #     name=cfg.NAME,
-    #     config=cfg,
-    #     entity='population_mapping',
-    #     project='paper2_debug',
-    #     tags=['population', ],
-    #     mode='online' if not cfg.DEBUG else 'disabled',
-    # )
+    wandb.init(
+        name=cfg.NAME,
+        config=cfg,
+        entity='population_mapping',
+        project='population_paper2_revision',
+        tags=['population', ],
+        mode='online' if not cfg.DEBUG else 'disabled',
+    )
 
     try:
         run_training(cfg)

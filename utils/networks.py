@@ -8,21 +8,21 @@ from collections import OrderedDict
 from sys import stderr
 
 
-def save_checkpoint(network, optimizer, epoch, step, cfg: experiment_manager.CfgNode):
-    save_file = Path(cfg.PATHS.OUTPUT) / 'networks' / f'{cfg.NAME}_checkpoint{epoch}.pt'
+def save_checkpoint(network, optimizer, epoch, cfg: experiment_manager.CfgNode):
+    save_file = Path(cfg.PATHS.OUTPUT) / 'networks' / f'{cfg.NAME}.pt'
     checkpoint = {
-        'step': step,
+        'epoch': epoch,
         'network': network.state_dict(),
         'optimizer': optimizer.state_dict()
     }
     torch.save(checkpoint, save_file)
 
 
-def load_checkpoint(epoch, cfg: experiment_manager.CfgNode, device, change_net: bool = False):
+def load_checkpoint(cfg: experiment_manager.CfgNode, device, change_net: bool = False):
     net = PopulationNet(cfg.MODEL) if not change_net else PopulationDualTaskNet(cfg.MODEL)
     net.to(device)
 
-    save_file = Path(cfg.PATHS.OUTPUT) / 'networks' / f'{cfg.NAME}_checkpoint{epoch}.pt'
+    save_file = Path(cfg.PATHS.OUTPUT) / 'networks' / f'{cfg.NAME}.pt'
     checkpoint = torch.load(save_file, map_location=device)
 
     optimizer = torch.optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
@@ -30,7 +30,7 @@ def load_checkpoint(epoch, cfg: experiment_manager.CfgNode, device, change_net: 
     net.load_state_dict(checkpoint['network'])
     optimizer.load_state_dict(checkpoint['optimizer'])
 
-    return net, optimizer, checkpoint['step']
+    return net, optimizer, checkpoint['epoch']
 
 
 def load_weights_finetuning(output_path: Path, config_name: str, epoch: int, device):
