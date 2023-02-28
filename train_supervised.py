@@ -71,8 +71,7 @@ def run_training(cfg):
             epoch_float = global_step / steps_per_epoch
 
             if global_step % cfg.LOGGING.FREQUENCY == 0:
-                print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
-                # logging
+                # print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
                 time = timeit.default_timer() - start
                 wandb.log({
                     'loss': np.mean(loss_set),
