@@ -11,7 +11,7 @@ from utils import networks, datasets, loss_functions, evaluation, experiment_man
 
 # https://github.com/wandb/examples/blob/master/colabs/pytorch/Organizing_Hyperparameter_Sweeps_in_PyTorch_with_W%26B.ipynb
 if __name__ == '__main__':
-    args = parsers.training_argument_parser().parse_known_args()[0]
+    args = parsers.sweep_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
