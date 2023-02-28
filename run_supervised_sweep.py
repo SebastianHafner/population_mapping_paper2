@@ -38,7 +38,7 @@ if __name__ == '__main__':
         print(dataset)
 
         dataloader_kwargs = {
-            'batch_size': sweep_cfg.BATCH_SIZE,
+            'batch_size': sweep_cfg.batch_size,
             'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
             'shuffle': cfg.DATALOADER.SHUFFLE,
             'drop_last': True,
