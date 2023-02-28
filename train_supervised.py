@@ -129,7 +129,7 @@ if __name__ == '__main__':
         name=cfg.NAME,
         config=cfg,
         entity='population_mapping',
-        project='population_paper2_revision',
+        project=args.project,
         tags=['population', ],
         mode='online' if not cfg.DEBUG else 'disabled',
     )
