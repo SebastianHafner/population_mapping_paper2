@@ -42,7 +42,7 @@ def run_training(cfg):
     global_step = epoch_float = 0
 
     # early stopping
-    best_f1_val, trigger_times = 0, 0
+    best_rmse_val, trigger_times = 0, 0
     stop_training = False
 
     for epoch in range(1, epochs + 1):
@@ -87,20 +87,20 @@ def run_training(cfg):
         print(f'epoch float {epoch_float} (step {global_step}) - epoch {epoch}')
         # evaluation at the end of an epoch
         _ = evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step)
-        f1_val = evaluation.model_evaluation(net, cfg, 'val', epoch_float, global_step)
+        rmse_val = evaluation.model_evaluation(net, cfg, 'val', epoch_float, global_step)
 
-        if f1_val <= best_f1_val:
+        if rmse_val >= best_rmse_val:
             trigger_times += 1
             if trigger_times > cfg.TRAINER.PATIENCE:
                 stop_training = True
         else:
-            best_f1_val = f1_val
+            best_rmse_val = rmse_val
             wandb.log({
-                'best val change F1': best_f1_val,
+                'best val rmse': best_rmse_val,
                 'step': global_step,
                 'epoch': epoch_float,
             })
-            print(f'saving network (F1 {f1_val:.3f})', flush=True)
+            print(f'saving network (F1 {rmse_val:.3f})', flush=True)
             networks.save_checkpoint(net, optimizer, epoch, cfg)
             trigger_times = 0
 
