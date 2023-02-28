@@ -11,7 +11,7 @@ from utils import networks, datasets, loss_functions, evaluation, experiment_man
 
 # https://github.com/wandb/examples/blob/master/colabs/pytorch/Organizing_Hyperparameter_Sweeps_in_PyTorch_with_W%26B.ipynb
 if __name__ == '__main__':
-    args = parsers.sweep_argument_parser().parse_known_args()[0]
+    args = parsers.training_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -20,110 +20,107 @@ if __name__ == '__main__':
 
     def run_training(sweep_cfg=None):
 
+        torch.manual_seed(cfg.SEED)
+        np.random.seed(cfg.SEED)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
         with wandb.init(config=sweep_cfg):
             sweep_cfg = wandb.config
 
-            # make training deterministic
-            torch.manual_seed(cfg.SEED)
-            np.random.seed(cfg.SEED)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
+        net = networks.PopulationNet(cfg.MODEL)
+        net.to(device)
+        optimizer = optim.AdamW(net.parameters(), lr=sweep_cfg.lr, weight_decay=0.01)
+        criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
-            net = networks.create_network(cfg)
-            net.to(device)
-            optimizer = optim.AdamW(net.parameters(), lr=sweep_cfg.lr, weight_decay=0.01)
+        # reset the generators
+        dataset = datasets.PopDataset(cfg=cfg, run_type='train')
+        print(dataset)
 
-            criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
+        dataloader_kwargs = {
+            'batch_size': sweep_cfg.BATCH_SIZE,
+            'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
+            'shuffle': cfg.DATALOADER.SHUFFLE,
+            'drop_last': True,
+            'pin_memory': True,
+        }
+        dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
-            # reset the generators
-            dataset = datasets.MultimodalCDDataset(cfg=cfg, run_type='train')
-            print(dataset)
+        # unpacking cfg
+        epochs = cfg.TRAINER.EPOCHS
+        steps_per_epoch = len(dataloader)
 
-            dataloader_kwargs = {
-                'batch_size': sweep_cfg.batch_size,
-                'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
-                'shuffle': cfg.DATALOADER.SHUFFLE,
-                'drop_last': True,
-                'pin_memory': True,
-            }
-            dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
+        # tracking variables
+        global_step = epoch_float = 0
 
-            # unpacking cfg
-            epochs = cfg.TRAINER.EPOCHS
-            steps_per_epoch = len(dataloader)
+        # early stopping
+        best_rmse_val, trigger_times = 0, 0
+        stop_training = False
 
-            # tracking variables
-            global_step = epoch_float = 0
+        for epoch in range(1, epochs + 1):
+            print(f'Starting epoch {epoch}/{epochs}.')
 
-            # early stopping
-            best_f1_val, trigger_times = 0, 0
-            stop_training = False
+            start = timeit.default_timer()
+            loss_set, pop_set = [], []
 
-            for epoch in range(1, epochs + 1):
-                print(f'Starting epoch {epoch}/{epochs}.')
+            for i, batch in enumerate(dataloader):
 
-                start = timeit.default_timer()
-                loss_set = []
+                net.train()
+                optimizer.zero_grad()
 
-                for i, batch in enumerate(dataloader):
+                x = batch['x'].to(device)
+                y_gts = batch['y'].to(device)
+                y_pred = net(x)
 
-                    net.train()
-                    optimizer.zero_grad()
+                loss = criterion(y_pred, y_gts.float())
+                loss.backward()
+                optimizer.step()
 
-                    x_t1 = batch['x_t1'].to(device)
-                    x_t2 = batch['x_t2'].to(device)
+                loss_set.append(loss.item())
+                pop_set.append(y_gts.flatten())
 
-                    logits = net(x_t1, x_t2)
+                global_step += 1
+                epoch_float = global_step / steps_per_epoch
 
-                    gt_change = batch['y_change'].to(device)
-
-                    loss = criterion(logits, gt_change)
-                    loss.backward()
-                    optimizer.step()
-
-                    loss_set.append(loss.item())
-
-                    global_step += 1
-                    epoch_float = global_step / steps_per_epoch
-
-                    if global_step % cfg.LOGGING.FREQUENCY == 0:
-                        # print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
-                        time = timeit.default_timer() - start
-                        wandb.log({
-                            'loss': np.mean(loss_set),
-                            'labeled_percentage': 100,
-                            'time': time,
-                            'step': global_step,
-                            'epoch': epoch_float,
-                        })
-                        start = timeit.default_timer()
-                        loss_set = []
-                    # end of batch
-
-                assert (epoch == epoch_float)
-                _ = evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step)
-                f1_val = evaluation.model_evaluation(net, cfg, 'val', epoch_float, global_step)
-
-                if f1_val <= best_f1_val:
-                    trigger_times += 1
-                    if trigger_times > cfg.TRAINER.PATIENCE:
-                        stop_training = True
-                else:
-                    best_f1_val = f1_val
+                if global_step % cfg.LOGGING.FREQUENCY == 0:
+                    # print(f'Logging step {global_step} (epoch {epoch_float:.2f}).')
+                    time = timeit.default_timer() - start
                     wandb.log({
-                        'best val change F1': best_f1_val,
+                        'loss': np.mean(loss_set),
+                        'time': time,
                         'step': global_step,
                         'epoch': epoch_float,
                     })
-                    print(f'saving network (F1 {f1_val:.3f})', flush=True)
-                    networks.save_checkpoint(net, optimizer, epoch, cfg)
-                    trigger_times = 0
+                    start = timeit.default_timer()
+                    loss_set = []
+                # end of batch
 
-                if stop_training:
-                    break  # end of training by early stopping
+            assert (epoch == epoch_float)
+            print(f'epoch float {epoch_float} (step {global_step}) - epoch {epoch}')
+            # evaluation at the end of an epoch
+            _ = evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step)
+            rmse_val = evaluation.model_evaluation(net, cfg, 'val', epoch_float, global_step)
 
-            net, *_ = networks.load_checkpoint(cfg, device)
-            _ = evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
+            if rmse_val >= best_rmse_val:
+                trigger_times += 1
+                if trigger_times > cfg.TRAINER.PATIENCE:
+                    stop_training = True
+            else:
+                best_rmse_val = rmse_val
+                wandb.log({
+                    'best val rmse': best_rmse_val,
+                    'step': global_step,
+                    'epoch': epoch_float,
+                })
+                print(f'saving network (F1 {rmse_val:.3f})', flush=True)
+                networks.save_checkpoint(net, optimizer, epoch, cfg)
+                trigger_times = 0
+
+            if stop_training:
+                break  # end of training by early stopping
+
+        net, *_ = networks.load_checkpoint(cfg, device)
+        _ = evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
 
 
     if args.sweep_id is None:
@@ -139,11 +136,11 @@ if __name__ == '__main__':
                 }
         }
         # Step 3: Initialize sweep by passing in config or resume sweep
-        sweep_id = wandb.sweep(sweep=sweep_config, project=args.project, entity='population_mapping')
+        sweep_id = wandb.sweep(sweep=sweep_config, project='population_paper2_revision', entity='population_mapping')
         # Step 4: Call to `wandb.agent` to start a sweep
         wandb.agent(sweep_id, function=run_training)
     else:
         # Or resume existing sweep via its id
         # https://github.com/wandb/wandb/issues/1501
         sweep_id = args.sweep_id
-        wandb.agent(sweep_id, project=args.project, function=run_training)
+        wandb.agent(sweep_id, project='population_paper2_revision', function=run_training)
