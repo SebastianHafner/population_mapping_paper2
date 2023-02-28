@@ -96,12 +96,12 @@ def run_training(cfg):
                 'step': global_step,
                 'epoch': epoch_float,
             })
-            print(f'saving network (F1 {rmse_val:.3f})', flush=True)
+            print(f'saving network (val RMSE {rmse_val:.3f})', flush=True)
             networks.save_checkpoint(net, optimizer, epoch, cfg)
             trigger_times = 0
         else:
             trigger_times += 1
-            if trigger_times > cfg.TRAINER.PATIENCE:
+            if trigger_times >= cfg.TRAINER.PATIENCE:
                 stop_training = True
 
         if stop_training:

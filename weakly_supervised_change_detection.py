@@ -13,6 +13,7 @@ from utils import networks, datasets, loss_functions, evaluation, experiment_man
 
 
 def run_training(cfg):
+
     cfg.MODEL.OUTPUT_PATH = cfg.PATHS.OUTPUT
     net = networks.PopulationDualTaskNet(cfg.MODEL)
     net.to(device)
@@ -34,16 +35,19 @@ def run_training(cfg):
 
     # unpacking cfg
     epochs = cfg.TRAINER.EPOCHS
-    save_checkpoints = cfg.SAVE_CHECKPOINTS
-
-    training_units = dataset_helpers.get_units(cfg.PATHS.DATASET, 'training')
+    train_units = dataset_helpers.get_units(cfg.PATHS.DATASET, 'train')
+    steps_per_epoch = len(train_units)
 
     # tracking variables
     global_step = epoch_float = 0
-    steps_per_epoch = len(training_units)
+
+    # early stopping
+    best_rmse_change_val, trigger_times = None, 0
+    stop_training = False
+
     if not cfg.DEBUG:
-        evaluation.model_change_evaluation_units(net, cfg, 'training', epoch_float, global_step)
-        evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step)
+        evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step)
+        evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step)
 
     # dummy_tensor = torch.rand((2, 4, 10, 10)).to(device)
     # with torch.no_grad():
@@ -56,10 +60,10 @@ def run_training(cfg):
         start = timeit.default_timer()
         loss_set = []
 
-        np.random.shuffle(training_units)
-        for i_unit, training_unit in enumerate(training_units):
+        np.random.shuffle(train_units)
+        for i_unit, train_unit in enumerate(train_units):
 
-            dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(training_unit))
+            dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=train_unit)
 
             dataloader_kwargs = {
                 'batch_size': len(dataset),
@@ -85,7 +89,7 @@ def run_training(cfg):
 
                 pred_change = torch.sum(pred_change, dim=0)
 
-                unit_str = f'{i_unit + 1:03d}/{len(training_units)}: Unit {training_unit} ({len(dataset)})'
+                unit_str = f'{i_unit + 1:03d}/{len(train_units)}: Unit {train_unit} ({len(dataset)})'
                 results_str = f'Pred: {pred_change.cpu().item():.0f}; GT: {y_change.cpu().item():.0f}'
                 sys.stdout.write("\r%s" % 'Train' + ' ' + unit_str + ' ' + results_str)
                 sys.stdout.flush()
@@ -113,11 +117,7 @@ def run_training(cfg):
         sys.stdout.write("\r%s" % epoch_str + '\n')
         sys.stdout.flush()
 
-        # logging at the end of each epoch
-        evaluation.model_change_evaluation_units(net, cfg, 'training', epoch_float, global_step)
-        evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step)
-
-        # logging
+        # logging loss
         time = timeit.default_timer() - start
         wandb.log({
             'loss': np.mean(loss_set),
@@ -125,12 +125,32 @@ def run_training(cfg):
             'step': global_step,
             'epoch': epoch_float,
         })
-
-        if epoch in save_checkpoints and not cfg.DEBUG:
-            print(f'saving network', flush=True)
-            networks.save_checkpoint(net, optimizer, epoch, global_step, cfg)
-
         loss_set = []
+
+        # logging at the end of each epoch
+        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step)
+        rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step)
+
+        if best_rmse_change_val is None or rmse_change_val < best_rmse_change_val:
+            best_rmse_change_val = rmse_change_val
+            wandb.log({
+                'best val change rmse': best_rmse_change_val,
+                'step': global_step,
+                'epoch': epoch_float,
+            })
+            print(f'saving network (RMSE change {rmse_change_val:.3f})', flush=True)
+            networks.save_checkpoint(net, optimizer, epoch, cfg)
+            trigger_times = 0
+        else:
+            trigger_times += 1
+            if trigger_times > cfg.TRAINER.PATIENCE:
+                stop_training = True
+
+        if stop_training:
+            break  # end of training by early stopping
+
+    net, *_ = networks.load_checkpoint(cfg, device)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step)
 
 
 if __name__ == '__main__':
@@ -151,7 +171,7 @@ if __name__ == '__main__':
         name=cfg.NAME,
         config=cfg,
         entity='population_mapping',
-        project='paper2_debug',
+        project=args.project,
         tags=['population', ],
         mode='online' if not cfg.DEBUG else 'disabled',
     )

@@ -108,31 +108,13 @@ if __name__ == '__main__':
                         'step': global_step,
                         'epoch': epoch_float,
                     })
-                    print(f'saving network (F1 {rmse_val:.3f})', flush=True)
+                    print(f'saving network (val RMSE {rmse_val:.3f})', flush=True)
                     networks.save_checkpoint(net, optimizer, epoch, cfg)
                     trigger_times = 0
                 else:
                     trigger_times += 1
-                    if trigger_times > cfg.TRAINER.PATIENCE:
+                    if trigger_times >= cfg.TRAINER.PATIENCE:
                         stop_training = True
-
-                if stop_training:
-                    break  # end of training by early stopping
-
-                if rmse_val >= best_rmse_val:
-                    trigger_times += 1
-                    if trigger_times > cfg.TRAINER.PATIENCE:
-                        stop_training = True
-                else:
-                    best_rmse_val = rmse_val
-                    wandb.log({
-                        'best val rmse': best_rmse_val,
-                        'step': global_step,
-                        'epoch': epoch_float,
-                    })
-                    print(f'saving network (F1 {rmse_val:.3f})', flush=True)
-                    networks.save_checkpoint(net, optimizer, epoch, cfg)
-                    trigger_times = 0
 
                 if stop_training:
                     break  # end of training by early stopping
