@@ -128,7 +128,7 @@ if __name__ == '__main__':
         sweep_config = {
             'method': 'grid',
             'name': cfg.NAME,
-            'metric': {'goal': 'maximize', 'name': 'best val change F1'},
+            'metric': {'goal': 'maximize', 'name': 'best val rmse'},
             'parameters':
                 {
                     'lr': {'values': [0.001, 0.0001, 0.00001]},
