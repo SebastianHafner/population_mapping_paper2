@@ -189,6 +189,7 @@ def model_change_evaluation_units(net: networks.PopulationChangeNet, cfg: experi
         #     break
 
     # assessment
+    return_value = None
     for measurer, name in zip([measurer_change_ete, measurer_change_pc, measurer_t1, measurer_t2],
                               ['diff', 'diff_pc', 'pop_t1', 'pop_t2']):
         rmse = measurer.root_mean_square_error()
@@ -204,3 +205,6 @@ def model_change_evaluation_units(net: networks.PopulationChangeNet, cfg: experi
             eval_str = f'RMSE: {rmse:.0f}; R2: {r2:.2f}'
             sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + eval_str + '\n')
             sys.stdout.flush()
+            return_value = rmse
+
+    return return_value

@@ -33,11 +33,9 @@ def load_checkpoint(cfg: experiment_manager.CfgNode, device, change_net: bool = 
     return net, optimizer, checkpoint['epoch']
 
 
-def load_weights_finetuning(output_path: Path, config_name: str, epoch: int, device):
-
-    save_file = Path(output_path) / 'networks' / f'{config_name}_checkpoint{epoch}.pt'
+def load_weights_finetuning(output_path: Path, config_name: str, device: torch.device):
+    save_file = Path(output_path) / 'networks' / f'{config_name}.pt'
     checkpoint = torch.load(save_file, map_location=device)
-
     return checkpoint['network']
 
 
@@ -76,6 +74,7 @@ class PopulationDualTaskNet(nn.Module):
 
     def __init__(self, model_cfg: experiment_manager.CfgNode):
         super(PopulationDualTaskNet, self).__init__()
+
         self.encoder = PopulationNet(model_cfg)
         self.encoder.enable_fc = False
         n_features = self.encoder.model.fc.in_features

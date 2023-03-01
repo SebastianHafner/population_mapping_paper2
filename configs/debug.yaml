@@ -1,2 +1,2 @@
-_BASE_: "base.yaml"
+_BASE_: "weak_change_detection_wet2020robust.yaml"
 DEBUG: True

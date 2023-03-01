@@ -12,7 +12,7 @@ import numpy as np
 from utils import networks, datasets, loss_functions, evaluation, experiment_manager, parsers, dataset_helpers
 
 
-def run_training(cfg):
+def run_training(cfg: experiment_manager.CfgNode):
 
     cfg.MODEL.OUTPUT_PATH = cfg.PATHS.OUTPUT
     net = networks.PopulationDualTaskNet(cfg.MODEL)
@@ -20,8 +20,7 @@ def run_training(cfg):
 
     pretraining = cfg.CHANGE_DETECTION.PRETRAINING
     if pretraining.ENABLED:
-        pretrained_weights = networks.load_weights_finetuning(cfg.PATHS.OUTPUT, pretraining.CFG_NAME,
-                                                              pretraining.EPOCH, device)
+        pretrained_weights = networks.load_weights_finetuning(cfg.PATHS.OUTPUT, pretraining.CFG_NAME, device)
         net.encoder.load_state_dict(pretrained_weights)
 
     if pretraining.FREEZE_ENCODER:
@@ -30,7 +29,6 @@ def run_training(cfg):
             param.requires_grad = False
 
     optimizer = optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
-
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
     # unpacking cfg
@@ -143,7 +141,7 @@ def run_training(cfg):
             trigger_times = 0
         else:
             trigger_times += 1
-            if trigger_times > cfg.TRAINER.PATIENCE:
+            if trigger_times >= cfg.TRAINER.PATIENCE:
                 stop_training = True
 
         if stop_training:

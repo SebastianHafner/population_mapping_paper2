@@ -27,7 +27,7 @@ def total_population(cfg: experiment_manager.CfgNode, run_type: str = 'all'):
     print(y_gt, y_pred)
 
 
-def unit_stats_bitemporal(cfg):
+def unit_stats_bitemporal(cfg: experiment_manager.CfgNode):
     file = Path(cfg.PATHS.OUTPUT) / 'inference' / 'unit_stats' / f'pop_kigali_{cfg.NAME}.json'
     assert(file.exists())
     pred_data = geofiles.load_json(file)
@@ -129,7 +129,7 @@ def unit_stats_bitemporal(cfg):
     plt.show()
 
 
-def unit_stats_change(cfg, split: str = 'test'):
+def unit_stats_change(cfg: experiment_manager.CfgNode, split: str = 'test'):
     file = Path(cfg.PATHS.OUTPUT) / 'inference' / 'unit_stats' / f'pop_kigali_{cfg.NAME}.json'
     assert (file.exists())
     pred_data = geofiles.load_json(file)
@@ -200,7 +200,7 @@ def unit_stats_change(cfg, split: str = 'test'):
     plt.show()
 
 
-def print_quantitative_results(cfg, split: str = 'test'):
+def print_quantitative_results(cfg: experiment_manager.CfgNode, split: str = 'test'):
     file = Path(cfg.PATHS.OUTPUT) / 'inference' / 'unit_stats' / f'pop_kigali_{cfg.NAME}.json'
     assert (file.exists())
     pred_data = geofiles.load_json(file)
@@ -234,7 +234,7 @@ def print_quantitative_results(cfg, split: str = 'test'):
         print(f'{split} {year}: RMSE = {rmse:.0f}; MAE = {mae:.0f}; R2 = {r_value:.2f}.')
 
 
-def print_quantitative_results_grid(cfg, split: str = 'test', year: int = 2020):
+def print_quantitative_results_grid(cfg: experiment_manager.CfgNode, split: str = 'test', year: int = 2020):
     file = Path(cfg.PATHS.OUTPUT) / 'inference' / 'population_grids' / f'pop_kigali_{year}_{cfg.NAME}.tif'
     assert (file.exists())
     arr, *_ = geofiles.read_tif(file)
@@ -248,7 +248,7 @@ def print_quantitative_results_grid(cfg, split: str = 'test', year: int = 2020):
     print(f'{split} {year}: RMSE = {rmse:.2f}; MAE = {mae:.2f}; R2 = {r_value:.2f}.')
 
 
-def produce_census_maps(cfg):
+def produce_census_maps(cfg: experiment_manager.CfgNode):
     pred_file = Path(cfg.PATHS.OUTPUT) / 'inference' / 'unit_stats' / f'pop_kigali_{cfg.NAME}.json'
     assert (pred_file.exists())
     pred_data = geofiles.load_json(pred_file)
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     args = parsers.deployment_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
     unit_stats_change(cfg)
+    print_quantitative_results(cfg)
+    print_quantitative_results_grid(cfg)
     # produce_census_maps(cfg)
-    # print_quantitative_results(cfg)
-    # print_quantitative_results_grid(cfg)
     # total_population(cfg, run_type=args.run_type)

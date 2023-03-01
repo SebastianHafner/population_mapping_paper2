@@ -132,6 +132,7 @@ class BitemporalCensusUnitDataset(AbstractPopDataset):
         self.no_augmentations = no_augmentations
         self.transform = augmentations.compose_transformations(cfg.AUGMENTATION, no_augmentations)
 
+        self.unit_nr = unit_nr
         self.samples = list(self.metadata['samples'][str(unit_nr)])
 
         manager = multiprocessing.Manager()
@@ -195,8 +196,12 @@ class PopInferenceDataset(AbstractPopDataset):
         self.no_augmentations = True
         self.transform = augmentations.compose_transformations(cfg.AUGMENTATION, self.no_augmentations)
 
-        if nonans:
-            self.samples = [s for s in self.samples if s['unit'] != 0]
+        self.samples = []
+        for unit_nr in self.metadata['samples'].keys():
+            if int(unit_nr) == 0 and nonans:
+                continue
+            self.samples.extend(self.metadata['samples'][unit_nr])
+
         manager = multiprocessing.Manager()
         self.samples = manager.list(self.samples)
 

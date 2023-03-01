@@ -3,12 +3,13 @@ from pathlib import Path
 import numpy as np
 from utils import experiment_manager, networks, datasets, parsers, geofiles
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def produce_population_grids(cfg: experiment_manager.CfgNode):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
+    net, *_ = networks.load_checkpoint(cfg, device)
     net.eval()
-    for year in range(2016, 2021):
+    for year in [2016, 2020]:
         ds = datasets.PopInferenceDataset(cfg, year)
         arr = ds.get_pop_grid()
         tracker = 0
@@ -21,7 +22,7 @@ def produce_population_grids(cfg: experiment_manager.CfgNode):
                 arr[i, j, 0] = float(pred)
                 arr[i, j, 1] = gt
                 tracker += 1
-                if tracker % 1_000 == 0:
+                if tracker % 10_000 == 0:
                     print(tracker)
 
         transform, crs = ds.get_pop_grid_geo()
@@ -30,8 +31,7 @@ def produce_population_grids(cfg: experiment_manager.CfgNode):
 
 
 def produce_population_grids_finetuned(cfg: experiment_manager.CfgNode):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device, change_net=True)
+    net, *_ = networks.load_checkpoint(cfg, device, change_net=True)
     net.eval()
 
     t1, t2 = 2016, 2020
@@ -56,7 +56,7 @@ def produce_population_grids_finetuned(cfg: experiment_manager.CfgNode):
                 arr[i, j, 0] = float(pred)
                 arr[i, j, 1] = gt
             tracker += 1
-            if tracker % 1_000 == 0:
+            if tracker % 10_000 == 0:
                 print(tracker)
 
         for t, ds, arr in zip([t1, t2], [ds_t1, ds_t2], [arr_t1, arr_t2]):
@@ -65,13 +65,12 @@ def produce_population_grids_finetuned(cfg: experiment_manager.CfgNode):
             geofiles.write_tif(file, arr, transform, crs)
 
 
+# quantitative population predictions on a census level unit
 def produce_unit_stats(cfg: experiment_manager.CfgNode):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device)
+    net, *_ = networks.load_checkpoint(cfg, device)
     net.eval()
 
     data = {}
-
     for year in [2016, 2020]:
         ds = datasets.PopInferenceDataset(cfg, year, nonans=True)
         tracker = 0
@@ -93,7 +92,7 @@ def produce_unit_stats(cfg: experiment_manager.CfgNode):
                     if not np.isnan(gt):
                         unit_data[f'gt_pop{year}'] = gt
                 tracker += 1
-                if tracker % 1_000 == 0:
+                if tracker % 10_000 == 0:
                     print(tracker)
 
     out_file = Path(cfg.PATHS.OUTPUT) / 'inference' / 'unit_stats' / f'pop_kigali_{cfg.NAME}.json'
@@ -101,8 +100,7 @@ def produce_unit_stats(cfg: experiment_manager.CfgNode):
 
 
 def produce_unit_stats_finetuned(cfg: experiment_manager.CfgNode):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    net, *_ = networks.load_checkpoint(cfg.INFERENCE_CHECKPOINT, cfg, device, change_net=True)
+    net, *_ = networks.load_checkpoint(cfg, device, change_net=True)
     net.eval()
 
     data = {}
@@ -146,7 +144,7 @@ def produce_unit_stats_finetuned(cfg: experiment_manager.CfgNode):
                 unit_data[f'pred_change'] = pred_change
 
             tracker += 1
-            if tracker % 1_000 == 0:
+            if tracker % 10_000 == 0:
                 print(tracker)
 
     out_file = Path(cfg.PATHS.OUTPUT) / 'inference' / 'unit_stats' / f'pop_kigali_{cfg.NAME}.json'
