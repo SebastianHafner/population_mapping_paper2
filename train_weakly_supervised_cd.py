@@ -44,8 +44,8 @@ def run_training(cfg: experiment_manager.CfgNode):
     stop_training = False
 
     if not cfg.DEBUG:
-        evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step)
-        evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step)
+        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step, verbose=True)
+        _ = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step, verbose=True)
 
     # dummy_tensor = torch.rand((2, 4, 10, 10)).to(device)
     # with torch.no_grad():
@@ -126,8 +126,9 @@ def run_training(cfg: experiment_manager.CfgNode):
         loss_set = []
 
         # logging at the end of each epoch
-        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step)
-        rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step)
+        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step, verbose=True)
+        rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step,
+                                                                   verbose=True)
 
         if best_rmse_change_val is None or rmse_change_val < best_rmse_change_val:
             best_rmse_change_val = rmse_change_val
@@ -148,7 +149,7 @@ def run_training(cfg: experiment_manager.CfgNode):
             break  # end of training by early stopping
 
     net, *_ = networks.load_checkpoint(cfg, device)
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step, verbose=True)
 
 
 if __name__ == '__main__':

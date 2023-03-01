@@ -139,7 +139,7 @@ def model_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_ma
 
 
 def model_change_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_manager.CfgNode, run_type: str,
-                           epoch: float, step: int):
+                           epoch: float, step: int, verbose: bool = False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(device)
     net.eval()
@@ -180,10 +180,11 @@ def model_change_evaluation_units(net: networks.PopulationChangeNet, cfg: experi
         measurer_t1.add_sample_torch(pred_t1, y_t1)
         measurer_t2.add_sample_torch(pred_t2, y_t2)
 
-        unit_str = f'{i_unit + 1:03d}/{len(units)}: Unit {unit} ({len(dataset)})'
-        results_str = f'Pred ETE: {pred_change_ete.cpu().item():.0f}; Pred PC: {pred_change_pc.cpu().item():.0f}; GT: {y_change.cpu().item():.0f}'
-        sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + unit_str + ' ' + results_str)
-        sys.stdout.flush()
+        if verbose:
+            unit_str = f'{i_unit + 1:03d}/{len(units)}: Unit {unit} ({len(dataset)})'
+            results_str = f'Pred ETE: {pred_change_ete.cpu().item():.0f}; Pred PC: {pred_change_pc.cpu().item():.0f}; GT: {y_change.cpu().item():.0f}'
+            sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + unit_str + ' ' + results_str)
+            sys.stdout.flush()
 
         # if i_unit:
         #     break
@@ -202,9 +203,10 @@ def model_change_evaluation_units(net: networks.PopulationChangeNet, cfg: experi
         })
 
         if name == 'diff':
-            eval_str = f'RMSE: {rmse:.0f}; R2: {r2:.2f}'
-            sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + eval_str + '\n')
-            sys.stdout.flush()
             return_value = rmse
+            if verbose:
+                eval_str = f'RMSE: {rmse:.0f}; R2: {r2:.2f}'
+                sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + eval_str + '\n')
+                sys.stdout.flush()
 
     return return_value
