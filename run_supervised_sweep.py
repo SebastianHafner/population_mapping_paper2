@@ -17,7 +17,6 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print('=== Runnning on device: p', device)
 
-
     def run_training(sweep_cfg=None):
 
         torch.manual_seed(cfg.SEED)

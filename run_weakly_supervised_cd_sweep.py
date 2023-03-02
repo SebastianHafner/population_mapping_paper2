@@ -17,8 +17,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print('=== Runnning on device: p', device)
 
-
-    def run_training(sweep_cfg):
+    def run_training(sweep_cfg=None):
 
         torch.manual_seed(cfg.SEED)
         np.random.seed(cfg.SEED)
@@ -97,7 +96,6 @@ if __name__ == '__main__':
                         loss = criterion(pred_change, y_change.float())
                         loss.backward()
                         optimizer.step()
-
 
                         loss_set.append(loss.item())
 
