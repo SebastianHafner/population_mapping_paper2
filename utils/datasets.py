@@ -7,6 +7,13 @@ from utils import augmentations, experiment_manager, geofiles
 from affine import Affine
 
 
+def get_units(dataset_path: str, split: str):
+    metadata_file = Path(dataset_path) / 'metadata.json'
+    metadata = geofiles.load_json(metadata_file)
+
+    return metadata['sets'][split]
+
+
 class AbstractPopDataset(torch.utils.data.Dataset):
 
     def __init__(self, cfg: experiment_manager.CfgNode):

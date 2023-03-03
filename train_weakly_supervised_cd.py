@@ -9,7 +9,7 @@ from torch.utils import data as torch_data
 import wandb
 import numpy as np
 
-from utils import networks, datasets, loss_functions, evaluation, experiment_manager, parsers, dataset_helpers
+from utils import networks, datasets, loss_functions, evaluation, experiment_manager, parsers
 
 
 def run_training(cfg: experiment_manager.CfgNode):
@@ -20,15 +20,15 @@ def run_training(cfg: experiment_manager.CfgNode):
     pretraining = cfg.CHANGE_DETECTION.PRETRAINING
     if pretraining.ENABLED:
         net.load_pretrained_encoder(pretraining.CFG_NAME, cfg.PATHS.OUTPUT, device, verbose=True)
-    if pretraining.FREEZE_ENCODER:
-        net.freeze_encoder()
+        if pretraining.FREEZE_ENCODER:
+            net.freeze_encoder()
 
     optimizer = optim.SGD(net.parameters(), lr=cfg.TRAINER.LR)
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
     # unpacking cfg
     epochs = cfg.TRAINER.EPOCHS
-    train_units = dataset_helpers.get_units(cfg.PATHS.DATASET, 'train')
+    train_units = datasets.get_units(cfg.PATHS.DATASET, 'train')
     steps_per_epoch = len(train_units)
 
     # tracking variables
@@ -38,9 +38,11 @@ def run_training(cfg: experiment_manager.CfgNode):
     best_rmse_change_val, trigger_times = None, 0
     stop_training = False
 
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float)
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float)
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float)
+    # evaluation
+    eval_kwargs = {'max_units': cfg.TRAINER.EVAL_MAX_UNITS, 'verbose': False}
+
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, **eval_kwargs)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, **eval_kwargs)
 
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
@@ -91,8 +93,8 @@ def run_training(cfg: experiment_manager.CfgNode):
         })
 
         # logging at the end of each epoch
-        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float)
-        rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float)
+        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, **eval_kwargs)
+        rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, **eval_kwargs)
 
         if best_rmse_change_val is None or rmse_change_val < best_rmse_change_val:
             best_rmse_change_val = rmse_change_val
@@ -113,7 +115,7 @@ def run_training(cfg: experiment_manager.CfgNode):
             break  # end of training by early stopping
 
     net, *_ = networks.load_checkpoint(cfg, device)
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, **eval_kwargs)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 import torch
 from torch.utils import data as torch_data
 import wandb
-from utils import datasets, networks, experiment_manager, dataset_helpers
+from utils import datasets, networks, experiment_manager
 import numpy as np
 from scipy import stats
 import sys
@@ -84,7 +84,7 @@ def model_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_
     measurer_change = RegressionEvaluation('diff')
     measurer_t1, measurer_t2 = RegressionEvaluation('pop_t1'), RegressionEvaluation('pop_t2')
 
-    units = dataset_helpers.get_units(cfg.PATHS.DATASET, run_type)
+    units = datasets.get_units(cfg.PATHS.DATASET, run_type)
 
     for i_unit, unit in enumerate(units):
         dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(unit), no_augmentations=True)
@@ -139,7 +139,7 @@ def model_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_
 
 
 def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_manager.CfgNode, run_type: str,
-                           epoch: float, verbose: bool = False):
+                                  epoch: float, verbose: bool = False, max_units: int = None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(device)
     net.eval()
@@ -147,7 +147,10 @@ def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: expe
     measurer_change_pc = RegressionEvaluation('diff_pc')  # post classification
     measurer_t1, measurer_t2 = RegressionEvaluation('pop_t1'), RegressionEvaluation('pop_t2')
 
-    units = dataset_helpers.get_units(cfg.PATHS.DATASET, run_type)
+    units = datasets.get_units(cfg.PATHS.DATASET, run_type)
+    if max_units is not None:
+        units = units[:max_units] if max_units < len(units) else units
+
     for i_unit, unit in enumerate(units):
         dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(unit), no_augmentations=True)
         dataloader_kwargs = {

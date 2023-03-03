@@ -77,7 +77,7 @@ class PopulationDualTaskNet(nn.Module):
             if freeze_bn_rmean:
                 if isinstance(m, torch.nn.BatchNorm2d):
                     m.track_running_stats = False
-                    m.eval()
+                    # m.eval()
         if freeze_fc:
             self.encoder.model.fc.requires_grad = False
 

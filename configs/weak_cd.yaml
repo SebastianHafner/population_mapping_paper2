@@ -1,0 +1,8 @@
+_BASE_: "base_weak_cd.yaml"
+
+TRAINER:
+  LR: 1e-5
+
+CHANGE_DETECTION:
+  PRETRAINING:
+    ENABLED: False
