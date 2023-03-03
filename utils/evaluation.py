@@ -139,7 +139,7 @@ def model_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_
 
 
 def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_manager.CfgNode, run_type: str,
-                           epoch: float, step: int, verbose: bool = False):
+                           epoch: float, verbose: bool = False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(device)
     net.eval()
@@ -194,7 +194,6 @@ def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: expe
         wandb.log({
             f'{run_type} {measurer.name} rmse': rmse,
             f'{run_type} {measurer.name} r2': r2,
-            'step': step,
             'epoch': epoch,
         })
 
