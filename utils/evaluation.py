@@ -8,7 +8,8 @@ import sys
 
 
 class RegressionEvaluation(object):
-    def __init__(self):
+    def __init__(self, name: str = None):
+        self.name = name
         self.predictions = []
         self.labels = []
 
@@ -74,15 +75,14 @@ def model_evaluation(net: networks.PopulationNet, cfg: experiment_manager.CfgNod
     return rmse
 
 
-def model_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_manager.CfgNode, run_type: str,
+def model_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_manager.CfgNode, run_type: str,
                            epoch: float, step: int):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(device)
     net.eval()
 
-    measurer_change = RegressionEvaluation()
-    measurer_t1 = RegressionEvaluation()
-    measurer_t2 = RegressionEvaluation()
+    measurer_change = RegressionEvaluation('diff')
+    measurer_t1, measurer_t2 = RegressionEvaluation('pop_t1'), RegressionEvaluation('pop_t2')
 
     units = dataset_helpers.get_units(cfg.PATHS.DATASET, run_type)
 
@@ -122,35 +122,32 @@ def model_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_ma
         #     break
 
     # assessment
-    for measurer, name in zip([measurer_change, measurer_t1, measurer_t2], ['diff', 'pop_t1', 'pop_t2']):
+    for measurer in [measurer_change, measurer_t1, measurer_t2]:
         rmse = measurer.root_mean_square_error()
         r2 = measurer.r_square()
         wandb.log({
-            f'{run_type} {name} rmse': rmse,
-            f'{run_type} {name} r2': r2,
+            f'{run_type} {measurer.name} rmse': rmse,
+            f'{run_type} {measurer.name} r2': r2,
             'step': step,
             'epoch': epoch,
         })
 
-        if name == 'diff':
+        if measurer.name == 'diff':
             eval_str = f'RMSE: {rmse:.0f}; R2: {r2:.2f}'
             sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + eval_str + '\n')
             sys.stdout.flush()
 
 
-def model_change_evaluation_units(net: networks.PopulationChangeNet, cfg: experiment_manager.CfgNode, run_type: str,
+def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_manager.CfgNode, run_type: str,
                            epoch: float, step: int, verbose: bool = False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(device)
     net.eval()
-
-    measurer_change_ete = RegressionEvaluation()  # end-to-end
-    measurer_change_pc = RegressionEvaluation()  # post classification
-    measurer_t1 = RegressionEvaluation()
-    measurer_t2 = RegressionEvaluation()
+    measurer_change_ete = RegressionEvaluation('diff')  # end-to-end
+    measurer_change_pc = RegressionEvaluation('diff_pc')  # post classification
+    measurer_t1, measurer_t2 = RegressionEvaluation('pop_t1'), RegressionEvaluation('pop_t2')
 
     units = dataset_helpers.get_units(cfg.PATHS.DATASET, run_type)
-
     for i_unit, unit in enumerate(units):
         dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(unit), no_augmentations=True)
         dataloader_kwargs = {
@@ -161,20 +158,19 @@ def model_change_evaluation_units(net: networks.PopulationChangeNet, cfg: experi
             'pin_memory': True,
         }
         dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
-        pred_change_ete = pred_t1 = pred_t2 = 0
 
-        for i, batch in enumerate(dataloader):
-            x_t1 = batch['x_t1'].to(device)
-            x_t2 = batch['x_t2'].to(device)
-            with torch.no_grad():
-                pred_change_ete, pred_t1, pred_t2 = net(x_t1, x_t2)
+        batch = next(iter(dataloader))
+        x_t1 = batch['x_t1'].to(device)
+        x_t2 = batch['x_t2'].to(device)
+        with torch.no_grad():
+            pred_change_ete, pred_t1, pred_t2 = net(x_t1, x_t2)
 
-        y = dataset.get_label()
-        y_change, y_t1, y_t2 = y['y_diff'].to(device), y['y_t1'].to(device), y['y_t2'].to(device)
         pred_change_ete = torch.sum(pred_change_ete, dim=0).detach()
         pred_t1 = torch.sum(pred_t1, dim=0).detach()
         pred_t2 = torch.sum(pred_t2, dim=0).detach()
         pred_change_pc = pred_t2 - pred_t1
+
+        y_change, y_t1, y_t2 = dataset.get_unit_labels()
         measurer_change_ete.add_sample_torch(pred_change_ete, y_change)
         measurer_change_pc.add_sample_torch(pred_change_pc, y_change)
         measurer_t1.add_sample_torch(pred_t1, y_t1)
@@ -186,23 +182,23 @@ def model_change_evaluation_units(net: networks.PopulationChangeNet, cfg: experi
             sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + unit_str + ' ' + results_str)
             sys.stdout.flush()
 
-        # if i_unit:
-        #     break
+        if cfg.DEBUG and i_unit:
+            # in debug mode exit after two units
+            break
 
     # assessment
     return_value = None
-    for measurer, name in zip([measurer_change_ete, measurer_change_pc, measurer_t1, measurer_t2],
-                              ['diff', 'diff_pc', 'pop_t1', 'pop_t2']):
+    for measurer in [measurer_change_ete, measurer_change_pc, measurer_t1, measurer_t2]:
         rmse = measurer.root_mean_square_error()
         r2 = measurer.r_square()
         wandb.log({
-            f'{run_type} {name} rmse': rmse,
-            f'{run_type} {name} r2': r2,
+            f'{run_type} {measurer.name} rmse': rmse,
+            f'{run_type} {measurer.name} r2': r2,
             'step': step,
             'epoch': epoch,
         })
 
-        if name == 'diff':
+        if measurer.name == 'diff':
             return_value = rmse
             if verbose:
                 eval_str = f'RMSE: {rmse:.0f}; R2: {r2:.2f}'

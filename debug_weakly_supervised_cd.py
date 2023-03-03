@@ -23,6 +23,10 @@ def run_training(cfg: experiment_manager.CfgNode):
     if pretraining.FREEZE_ENCODER:
         net.freeze_encoder()
 
+    net.print_weight_stamps()
+    net.print_output_stamps()
+
+    # optimizer = optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
     optimizer = optim.SGD(net.parameters(), lr=cfg.TRAINER.LR)
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
@@ -38,9 +42,11 @@ def run_training(cfg: experiment_manager.CfgNode):
     best_rmse_change_val, trigger_times = None, 0
     stop_training = False
 
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step)
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step)
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step, verbose=True)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step, verbose=True)
+
+    net.print_weight_stamps()
+    net.print_output_stamps()
 
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
@@ -64,17 +70,27 @@ def run_training(cfg: experiment_manager.CfgNode):
             net.train()
             optimizer.zero_grad()
 
+            net.print_weight_stamps()
+            net.print_output_stamps()
+
             x_t1 = batch['x_t1'].to(device)
             x_t2 = batch['x_t2'].to(device)
             pred_change, pred_pop_t1, pred_pop_t2 = net(x_t1, x_t2)
             # need to be detached for backprop to work
             pred_pop_t1.detach(), pred_pop_t2.detach()
+
             pred_change = torch.sum(pred_change, dim=0)
+
+            net.print_weight_stamps()
+            net.print_output_stamps()
 
             y_change, *_ = dataset.get_unit_labels()
             loss = criterion(pred_change, y_change.to(device).float())
             loss.backward()
             optimizer.step()
+
+            net.print_weight_stamps()
+            net.print_output_stamps()
 
             loss_set.append(loss.item())
 
@@ -85,6 +101,9 @@ def run_training(cfg: experiment_manager.CfgNode):
             results_str = f'Pred: {pred_change.cpu().item():.0f}; GT: {y_change.cpu().item():.0f}'
             sys.stdout.write("\r%s" % 'Train' + ' ' + unit_str + ' ' + results_str)
             sys.stdout.flush()
+
+            if cfg.DEBUG and i_unit == 2:
+                break
 
         epoch_str = f'Train Loss - {np.mean(loss_set):.0f}'
         sys.stdout.write("\r%s" % epoch_str + '\n')
@@ -99,9 +118,15 @@ def run_training(cfg: experiment_manager.CfgNode):
             'epoch': epoch_float,
         })
 
+        net.print_weight_stamps()
+        net.print_output_stamps()
+
         # logging at the end of each epoch
-        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step)
-        rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step)
+        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, global_step, verbose=True)
+        rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, global_step,
+                                                                   verbose=True)
+        net.print_weight_stamps()
+        net.print_output_stamps()
 
         if best_rmse_change_val is None or rmse_change_val < best_rmse_change_val:
             best_rmse_change_val = rmse_change_val
@@ -122,7 +147,7 @@ def run_training(cfg: experiment_manager.CfgNode):
             break  # end of training by early stopping
 
     net, *_ = networks.load_checkpoint(cfg, device)
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, global_step, verbose=True)
 
 
 if __name__ == '__main__':

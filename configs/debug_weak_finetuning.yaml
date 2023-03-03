@@ -1,2 +1,0 @@
-_BASE_: "base_weak_finetuning.yaml"
-DEBUG: True

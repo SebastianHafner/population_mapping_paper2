@@ -33,41 +33,10 @@ def load_checkpoint(cfg: experiment_manager.CfgNode, device, change_net: bool = 
     return net, optimizer, checkpoint['epoch']
 
 
-def load_weights_finetuning(output_path: Path, config_name: str, device: torch.device):
+def load_weights(output_path: Path, config_name: str, device: torch.device):
     save_file = Path(output_path) / 'networks' / f'{config_name}.pt'
     checkpoint = torch.load(save_file, map_location=device)
     return checkpoint['network']
-
-
-def create_ema_network(net, cfg):
-    ema_net = EMA(net, decay=cfg.CONSISTENCY_TRAINER.WEIGHT_DECAY)
-    return ema_net
-
-
-class DualStreamPopulationNet(nn.Module):
-
-    def __init__(self, dual_model_cfg: experiment_manager.CfgNode):
-        super(DualStreamPopulationNet, self).__init__()
-        self.dual_model_cfg = dual_model_cfg
-        self.stream1_cfg = dual_model_cfg.STREAM1
-        self.stream2_cfg = dual_model_cfg.STREAM2
-
-        self.stream1 = PopulationNet(self.stream1_cfg, enable_fc=False)
-        self.stream2 = PopulationNet(self.stream2_cfg, enable_fc=False)
-
-        stream1_num_ftrs = self.stream1.model.fc.in_features
-        stream2_num_ftrs = self.stream2.model.fc.in_features
-        self.outc = nn.Linear(stream1_num_ftrs + stream2_num_ftrs, dual_model_cfg.OUT_CHANNELS)
-        self.relu = torch.nn.ReLU()
-
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> tuple:
-        features1 = self.stream1(x1)
-        features2 = self.stream2(x2)
-        p1 = self.relu(self.stream1.model.fc(features1))
-        p2 = self.relu(self.stream2.model.fc(features2))
-        features_fusion = torch.cat((features1, features2), dim=1)
-        p_fusion = self.relu(self.outc(features_fusion))
-        return p_fusion, p1, p2
 
 
 class PopulationDualTaskNet(nn.Module):
@@ -81,6 +50,9 @@ class PopulationDualTaskNet(nn.Module):
         self.change_fc = nn.Linear(n_features, 1)
         self.relu = torch.nn.ReLU()
 
+        self.dummy_input_t1 = torch.rand((2, 4, 10, 10)).to('cuda')
+        self.dummy_input_t2 = torch.rand((2, 4, 10, 10)).to('cuda')
+
     def forward(self, x_t1: torch.Tensor, x_t2: torch.Tensor) -> tuple:
         features_t1 = self.encoder(x_t1)
         features_t2 = self.encoder(x_t2)
@@ -90,23 +62,56 @@ class PopulationDualTaskNet(nn.Module):
         p_change = self.change_fc(features_fusion)
         return p_change, p_t1, p_t2
 
+    def load_pretrained_encoder(self, cfg_name: str, weights_path: Path, device: torch.device, verbose: bool = True):
+        pretrained_weights = load_weights(weights_path, cfg_name, device)
+        self.encoder.load_state_dict(pretrained_weights)
+        if verbose:
+            print(f'Loaded encoder weights from {cfg_name}!')
 
-class PopulationChangeNet(nn.Module):
+    def freeze_encoder(self, freeze_fc: bool = True, freeze_bn_rmean: bool = True):
+        # https://discuss.pytorch.org/t/network-output-changes-even-when-freezed-during-training/36423/6
+        # https://discuss.pytorch.org/t/how-to-freeze-bn-layers-while-training-the-rest-of-network-mean-and-var-wont-freeze/89736/17
+        for m in self.encoder.modules():
+            for param in m.parameters():
+                param.requires_grad = False
+            if freeze_bn_rmean:
+                if isinstance(m, torch.nn.BatchNorm2d):
+                    m.track_running_stats = False
+                    m.eval()
+        if freeze_fc:
+            self.encoder.model.fc.requires_grad = False
 
-    def __init__(self, model_cfg: experiment_manager.CfgNode):
-        super(PopulationChangeNet, self).__init__()
-        self.encoder = PopulationNet(model_cfg)
-        self.encoder.enable_fc = False
-        n_features = self.encoder.model.fc.in_features
-        self.change_fc = nn.Linear(n_features, 1)
-        self.relu = torch.nn.ReLU()
+    def print_weight_stamps(self):
+        enc_stamp = 0
+        for parameter in self.encoder.parameters():
+            enc_stamp += torch.sum(parameter).item()
 
-    def forward(self, x_t1: torch.Tensor, x_t2: torch.Tensor) -> tuple:
-        features_t1 = self.encoder(x_t1)
-        features_t2 = self.encoder(x_t2)
-        features_fusion = features_t2 - features_t1
-        p_change = self.change_fc(features_fusion)
-        return p_change
+        net_stamp = 0
+        for parameter in self.parameters():
+            net_stamp += torch.sum(parameter).item()
+        print(f'Weight stamps: net {net_stamp:.3f}, enc {enc_stamp:.3f}')
+
+    def print_output_stamps(self):
+        training = self.training
+        if self.training:
+            self.eval()
+        with torch.no_grad():
+            features_t1 = self.encoder(self.dummy_input_t1)
+            features_t2 = self.encoder(self.dummy_input_t2)
+
+            p_t1 = self.relu(self.encoder.model.fc(features_t1))
+            p_t2 = self.relu(self.encoder.model.fc(features_t2))
+
+            features_fusion = features_t2 - features_t1
+            p_change = self.change_fc(features_fusion)
+
+            # out_diff, b, c = self.forward(self.dummy_input_t1, self.dummy_input_t2)
+
+        print(f'Enc output stamp {torch.sum(p_t1).item():.3f}, {torch.sum(p_t2).item():.3f}')
+        print(f'Net output stamp {torch.sum(p_change).item():.3f}')
+
+        if training:
+            self.train()
 
 
 class PopulationNet(nn.Module):
@@ -168,63 +173,6 @@ class PopulationNet(nn.Module):
             x = x.squeeze()
             if len(x.shape) == 1:
                 x = x.unsqueeze(0)
-        return x
-
-
-# https://www.zijianhu.com/post/pytorch/ema/
-class EMA(nn.Module):
-    def __init__(self, model: nn.Module, decay: float):
-        super().__init__()
-        self.decay = decay
-
-        self.model = model
-        self.ema_model = deepcopy(self.model)
-
-        for param in self.ema_model.parameters():
-            param.detach_()
-
-    @torch.no_grad()
-    def update(self):
-        if not self.training:
-            print("EMA update should only be called during training", file=stderr, flush=True)
-            return
-
-        model_params = OrderedDict(self.model.named_parameters())
-        ema_model_params = OrderedDict(self.ema_model.named_parameters())
-
-        # check if both model contains the same set of keys
-        assert model_params.keys() == ema_model_params.keys()
-
-        for name, param in model_params.items():
-            # see https://www.tensorflow.org/api_docs/python/tf/train/ExponentialMovingAverage
-            # shadow_variable -= (1 - decay) * (shadow_variable - variable)
-            ema_model_params[name].sub_((1. - self.decay) * (ema_model_params[name] - param))
-
-        model_buffers = OrderedDict(self.model.named_buffers())
-        ema_model_buffers = OrderedDict(self.ema_model.named_buffers())
-
-        # check if both model contains the same set of keys
-        assert model_buffers.keys() == ema_model_buffers.keys()
-
-        for name, buffer in model_buffers.items():
-            # buffers are copied
-            ema_model_buffers[name].copy_(buffer)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.ema_model(inputs)
-
-    def get_ema_model(self):
-        return self.ema_model
-
-    def get_model(self):
-        return self.model
-
-
-class Identity(nn.Module):
-    def __init__(self):
-        super(Identity, self).__init__()
-
-    def forward(self, x):
         return x
 
 
