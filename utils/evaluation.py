@@ -6,6 +6,8 @@ import numpy as np
 from scipy import stats
 import sys
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 class RegressionEvaluation(object):
     def __init__(self, name: str = None):
@@ -36,7 +38,6 @@ class RegressionEvaluation(object):
 
 def model_evaluation(net: networks.PopulationNet, cfg: experiment_manager.CfgNode, run_type: str, epoch: float,
                           step: int, max_samples: int = None):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(device)
     net.eval()
 
@@ -77,7 +78,7 @@ def model_evaluation(net: networks.PopulationNet, cfg: experiment_manager.CfgNod
 
 def model_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_manager.CfgNode, run_type: str,
                            epoch: float, step: int):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     net.to(device)
     net.eval()
 
@@ -118,9 +119,6 @@ def model_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_
         sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + unit_str + ' ' + results_str)
         sys.stdout.flush()
 
-        # if i_unit:
-        #     break
-
     # assessment
     for measurer in [measurer_change, measurer_t1, measurer_t2]:
         rmse = measurer.root_mean_square_error()
@@ -132,14 +130,14 @@ def model_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_
             'epoch': epoch,
         })
 
-        if measurer.name == 'diff':
+        if cfg.TRAINER.VERBOSE and measurer.name == 'diff':
             eval_str = f'RMSE: {rmse:.0f}; R2: {r2:.2f}'
             sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + eval_str + '\n')
             sys.stdout.flush()
 
 
 def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_manager.CfgNode, run_type: str,
-                                  epoch: float, verbose: bool = False, max_units: int = None):
+                                  epoch: float):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net.to(device)
     net.eval()
@@ -148,8 +146,8 @@ def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: expe
     measurer_t1, measurer_t2 = RegressionEvaluation('pop_t1'), RegressionEvaluation('pop_t2')
 
     units = datasets.get_units(cfg.PATHS.DATASET, run_type)
-    if max_units is not None:
-        units = units[:max_units] if max_units < len(units) else units
+    if cfg.TRAINER.EVAL_MAX_UNITS is not None:
+        units = units[:cfg.TRAINER.EVAL_MAX_UNITS] if cfg.TRAINER.EVAL_MAX_UNITS < len(units) else units
 
     for i_unit, unit in enumerate(units):
         dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(unit), no_augmentations=True)
@@ -179,15 +177,11 @@ def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: expe
         measurer_t1.add_sample_torch(pred_t1, y_t1)
         measurer_t2.add_sample_torch(pred_t2, y_t2)
 
-        if verbose:
+        if cfg.TRAINER.VERBOSE:
             unit_str = f'{i_unit + 1:03d}/{len(units)}: Unit {unit} ({len(dataset)})'
             results_str = f'Pred ETE: {pred_change_ete.cpu().item():.0f}; Pred PC: {pred_change_pc.cpu().item():.0f}; GT: {y_change.cpu().item():.0f}'
             sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + unit_str + ' ' + results_str)
             sys.stdout.flush()
-
-        if cfg.DEBUG and i_unit:
-            # in debug mode exit after two units
-            break
 
     # assessment
     return_value = None
@@ -202,7 +196,7 @@ def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: expe
 
         if measurer.name == 'diff':
             return_value = rmse
-            if verbose:
+            if cfg.TRAINER.VERBOSE:
                 eval_str = f'RMSE: {rmse:.0f}; R2: {r2:.2f}'
                 sys.stdout.write("\r%s" % f'Eval ({run_type})' + ' ' + eval_str + '\n')
                 sys.stdout.flush()

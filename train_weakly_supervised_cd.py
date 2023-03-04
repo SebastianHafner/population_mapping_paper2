@@ -23,7 +23,8 @@ def run_training(cfg: experiment_manager.CfgNode):
         if pretraining.FREEZE_ENCODER:
             net.freeze_encoder()
 
-    optimizer = optim.SGD(net.parameters(), lr=cfg.TRAINER.LR)
+    # optimizer = optim.SGD(net.parameters(), lr=cfg.TRAINER.LR)
+    optimizer = optim.AdamW(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.01)
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
     # unpacking cfg
@@ -38,11 +39,8 @@ def run_training(cfg: experiment_manager.CfgNode):
     best_rmse_change_val, trigger_times = None, 0
     stop_training = False
 
-    # evaluation
-    eval_kwargs = {'max_units': cfg.TRAINER.EVAL_MAX_UNITS, 'verbose': False}
-
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, **eval_kwargs)
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, **eval_kwargs)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float)
 
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
@@ -51,6 +49,10 @@ def run_training(cfg: experiment_manager.CfgNode):
         loss_set = []
 
         np.random.shuffle(train_units)
+        if cfg.TRAINER.EVAL_MAX_UNITS is not None:
+            train_units = train_units[:cfg.TRAINER.EVAL_MAX_UNITS] if cfg.TRAINER.EVAL_MAX_UNITS < len(train_units) \
+                else train_units
+
         for i_unit, train_unit in enumerate(train_units):
             dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=train_unit)
             dataloader_kwargs = {
@@ -83,6 +85,12 @@ def run_training(cfg: experiment_manager.CfgNode):
             global_step += 1
             epoch_float = global_step / steps_per_epoch
 
+            if cfg.TRAINER.VERBOSE:
+                unit_str = f'{i_unit + 1:03d}/{len(train_units)}: Unit {train_unit} ({len(dataset)})'
+                results_str = f'Pred: {pred_change.cpu().item():.0f}; GT: {y_change.cpu().item():.0f}'
+                sys.stdout.write("\r%s" % 'Train' + ' ' + unit_str + ' ' + results_str)
+                sys.stdout.flush()
+
         # logging loss
         time = timeit.default_timer() - start
         wandb.log({
@@ -92,9 +100,13 @@ def run_training(cfg: experiment_manager.CfgNode):
             'epoch': epoch_float,
         })
 
+        epoch_str = f'Train Loss - {np.mean(loss_set):.0f}'
+        sys.stdout.write("\r%s" % epoch_str + '\n')
+        sys.stdout.flush()
+
         # logging at the end of each epoch
-        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float, **eval_kwargs)
-        rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float, **eval_kwargs)
+        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float)
+        rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float)
 
         if best_rmse_change_val is None or rmse_change_val < best_rmse_change_val:
             best_rmse_change_val = rmse_change_val
@@ -115,7 +127,7 @@ def run_training(cfg: experiment_manager.CfgNode):
             break  # end of training by early stopping
 
     net, *_ = networks.load_checkpoint(cfg, device)
-    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float, **eval_kwargs)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'test', epoch_float)
 
 
 if __name__ == '__main__':

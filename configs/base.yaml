@@ -13,6 +13,7 @@ TRAINER:
   EPOCHS: 100
   OPTIMIZER: 'adamw'
   PATIENCE: 5
+  VERBOSE: False
 
 MODEL:
   TYPE: 'resnet'
