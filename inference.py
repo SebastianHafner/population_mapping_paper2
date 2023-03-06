@@ -30,8 +30,8 @@ def produce_population_grids(cfg: experiment_manager.CfgNode):
         geofiles.write_tif(file, arr, transform, crs)
 
 
-def produce_population_grids_finetuned(cfg: experiment_manager.CfgNode):
-    net, *_ = networks.load_checkpoint(cfg, device, change_net=True)
+def produce_population_grids_endtoend(cfg: experiment_manager.CfgNode):
+    net, *_ = networks.load_checkpoint(cfg, device)
     net.eval()
 
     t1, t2 = 2016, 2020
@@ -99,8 +99,8 @@ def produce_unit_stats(cfg: experiment_manager.CfgNode):
     geofiles.write_json(out_file, data)
 
 
-def produce_unit_stats_finetuned(cfg: experiment_manager.CfgNode):
-    net, *_ = networks.load_checkpoint(cfg, device, change_net=True)
+def produce_unit_stats_endtoend(cfg: experiment_manager.CfgNode):
+    net, *_ = networks.load_checkpoint(cfg, device)
     net.eval()
 
     data = {}
@@ -158,5 +158,5 @@ if __name__ == '__main__':
         produce_unit_stats(cfg)
         produce_population_grids(cfg)
     else:
-        produce_unit_stats_finetuned(cfg)
-        produce_population_grids_finetuned(cfg)
+        produce_unit_stats_endtoend(cfg)
+        produce_population_grids_endtoend(cfg)
