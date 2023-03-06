@@ -18,8 +18,8 @@ def save_checkpoint(network, optimizer, epoch, cfg: experiment_manager.CfgNode):
     torch.save(checkpoint, save_file)
 
 
-def load_checkpoint(cfg: experiment_manager.CfgNode, device, change_net: bool = False):
-    net = PopulationNet(cfg.MODEL) if not change_net else PopulationDualTaskNet(cfg.MODEL)
+def load_checkpoint(cfg: experiment_manager.CfgNode, device: torch.device):
+    net = PopulationDualTaskNet(cfg.MODEL) if cfg.CHANGE_DETECTION.ENDTOEND else PopulationNet(cfg.MODEL)
     net.to(device)
 
     save_file = Path(cfg.PATHS.OUTPUT) / 'networks' / f'{cfg.NAME}.pt'
