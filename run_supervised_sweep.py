@@ -135,7 +135,7 @@ if __name__ == '__main__':
                 }
         }
         # Step 3: Initialize sweep by passing in config or resume sweep
-        sweep_id = wandb.sweep(sweep=sweep_config, project=args.project, entity='population_mapping')
+        sweep_id = wandb.sweep(sweep=sweep_config, project=args.project, entity=args.entity)
         # Step 4: Call to `wandb.agent` to start a sweep
         wandb.agent(sweep_id, function=run_training)
     else:

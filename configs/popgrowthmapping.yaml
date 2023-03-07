@@ -1,4 +1,4 @@
-_BASE_: "base_weak_cd.yaml"
+_BASE_: "base_popgrowthmapping.yaml"
 
 TRAINER:
   LR: 1e-5

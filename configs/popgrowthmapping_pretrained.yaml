@@ -1,4 +1,4 @@
-_BASE_: "base_weak_cd.yaml"
+_BASE_: "base_popgrowthmapping.yaml"
 
 TRAINER:
   LR: 1e-5
@@ -6,5 +6,5 @@ TRAINER:
 CHANGE_DETECTION:
   PRETRAINING:
     ENABLED: True
-    CFG_NAME: 'wet2020robust'
+    CFG_NAME: 'popmapping'
     FREEZE_ENCODER: True

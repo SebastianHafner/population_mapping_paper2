@@ -13,7 +13,7 @@ CHANGE_DETECTION:
   ENDTOEND: True
   PRETRAINING:
     ENABLED: False
-    CFG_NAME: 'wet2020robust'
+    CFG_NAME: 'popmapping'
     FREEZE_ENCODER: False
 
 MODEL:

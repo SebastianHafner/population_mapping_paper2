@@ -128,7 +128,7 @@ if __name__ == '__main__':
     wandb.init(
         name=cfg.NAME,
         config=cfg,
-        entity='population_mapping',
+        entity=args.entity,
         project=args.project,
         tags=['population', ],
         mode='online' if not cfg.DEBUG else 'disabled',

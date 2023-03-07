@@ -1,2 +1,0 @@
-_BASE_: "weak_cd_wet2020robust.yaml"
-DEBUG: True

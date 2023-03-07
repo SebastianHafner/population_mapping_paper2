@@ -136,10 +136,10 @@ if __name__ == '__main__':
             'metric': {'goal': 'maximize', 'name': 'best val change rmse'},
             'parameters':
                 {
-                    'lr': {'values': [0.001, 0.005, 0.0001, 0.0005, 0.00001]},
+                    'lr': {'values': [0.001, 0.0001, 0.00001]},
                 }
         }
-        sweep_id = wandb.sweep(sweep=sweep_config, project=args.project, entity='population_mapping')
+        sweep_id = wandb.sweep(sweep=sweep_config, project=args.project, entity=args.entity)
         wandb.agent(sweep_id, function=run_training)
     else:
         # Or resume existing sweep via its id

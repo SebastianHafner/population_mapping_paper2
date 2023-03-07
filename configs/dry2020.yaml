@@ -1,9 +1,0 @@
-_BASE_: "base.yaml"
-
-TRAINER:
-  LR: 1e-3
-  BATCH_SIZE: 16
-
-DATALOADER:
-  YEAR: 2020
-  SEASON: 'dry'

@@ -39,8 +39,8 @@ def run_training(cfg: experiment_manager.CfgNode):
     best_rmse_change_val, trigger_times = None, 0
     stop_training = False
 
-    # _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float)
-    # _ = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float)
+    _ = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float)
 
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
@@ -48,11 +48,10 @@ def run_training(cfg: experiment_manager.CfgNode):
         start = timeit.default_timer()
         loss_set = []
 
-        # np.random.shuffle(train_units)
+        np.random.shuffle(train_units)
         if cfg.TRAINER.EVAL_MAX_UNITS is not None:
-            train_units = train_units[:cfg.TRAINER.EVAL_MAX_UNITS] if cfg.TRAINER.EVAL_MAX_UNITS < len(train_units)\
+            train_units = train_units[:cfg.TRAINER.EVAL_MAX_UNITS] if cfg.TRAINER.EVAL_MAX_UNITS < len(train_units) \
                 else train_units
-        print(train_units)
 
         for i_unit, train_unit in enumerate(train_units):
             dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=train_unit)
@@ -106,7 +105,7 @@ def run_training(cfg: experiment_manager.CfgNode):
         sys.stdout.flush()
 
         # logging at the end of each epoch
-        # _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float)
+        _ = evaluation.model_change_evaluation_units(net, cfg, 'train', epoch_float)
         rmse_change_val = evaluation.model_change_evaluation_units(net, cfg, 'val', epoch_float)
 
         if best_rmse_change_val is None or rmse_change_val < best_rmse_change_val:
@@ -148,7 +147,7 @@ if __name__ == '__main__':
     wandb.init(
         name=cfg.NAME,
         config=cfg,
-        entity='population_mapping',
+        entity=args.entity,
         project=args.project,
         tags=['population', ],
         mode='online' if not cfg.DEBUG else 'disabled',
