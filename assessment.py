@@ -197,7 +197,8 @@ def unit_stats_change(cfg: experiment_manager.CfgNode, split: str = 'test'):
         lines.Line2D([0], [0], color='r', lw=1, label='1:1 Line'),
         lines.Line2D([0], [0], marker='.', color='w', markerfacecolor='#1f77b4', label='Census Unit', markersize=10),
     ]
-    ax.legend(handles=legend_elements, frameon=False, loc='lower right', handlelength=1)
+    if not cfg.CHANGE_DETECTION.ENDTOEND:
+        ax.legend(handles=legend_elements, frameon=True, loc='lower right', handlelength=1)
 
     file = Path(cfg.PATHS.OUTPUT) / 'plots' / f'change_{cfg.NAME}.png'
     plt.savefig(file, dpi=300, bbox_inches='tight')
@@ -292,8 +293,8 @@ def produce_census_maps(cfg: experiment_manager.CfgNode):
 if __name__ == '__main__':
     args = parsers.deployment_argument_parser().parse_known_args()[0]
     cfg = experiment_manager.setup_cfg(args)
-    # unit_stats_change(cfg)
+    unit_stats_change(cfg)
     # print_quantitative_results(cfg)
     # print_quantitative_results_grid(cfg)
-    produce_census_maps(cfg)
+    # produce_census_maps(cfg)
     # total_population(cfg, run_type=args.run_type)
