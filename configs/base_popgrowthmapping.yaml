@@ -25,6 +25,9 @@ MODEL:
   LOSS_TYPE: 'L2'
 
 DATALOADER:
+  TRAIN: 'Fold1'
+  VAL: 'Fold2'
+  TEST: 'Fold3'
   NUM_WORKER: 2
   SHUFFLE: True
   SITES: ['kigali']
