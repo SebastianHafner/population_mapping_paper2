@@ -24,6 +24,9 @@ MODEL:
   LOSS_TYPE: 'L2'
 
 DATALOADER:
+  TRAIN: 'fold1'
+  VAL: 'fold2'
+  TEST: 'fold3'
   NUM_WORKER: 8
   SHUFFLE: True
   YEAR: 2020

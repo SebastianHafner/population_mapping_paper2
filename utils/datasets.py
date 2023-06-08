@@ -8,7 +8,7 @@ from affine import Affine
 
 
 def get_units(dataset_path: str, split: str):
-    metadata_file = Path(dataset_path) / 'metadata.json'
+    metadata_file = Path(dataset_path) / 'metadata_folds.json'
     metadata = geofiles.load_json(metadata_file)
 
     return metadata['sets'][split]
@@ -20,7 +20,7 @@ class AbstractPopDataset(torch.utils.data.Dataset):
         super().__init__()
         self.cfg = cfg
         self.root_path = Path(cfg.PATHS.DATASET)
-        self.metadata = geofiles.load_json(self.root_path / 'metadata.json')
+        self.metadata = geofiles.load_json(self.root_path / 'metadata_folds.json')
         self.indices = [['B2', 'B3', 'B4', 'B8'].index(band) for band in cfg.DATALOADER.SPECTRAL_BANDS]
         self.year = cfg.DATALOADER.YEAR
         self.season = cfg.DATALOADER.SEASON
@@ -79,7 +79,7 @@ class AbstractPopDataset(torch.utils.data.Dataset):
 # dataset for urban extraction with building footprints
 class PopDataset(AbstractPopDataset):
 
-    def __init__(self, cfg: experiment_manager.CfgNode, run_type: str, no_augmentations: bool = False):
+    def __init__(self, cfg: experiment_manager.CfgNode, fold: str, no_augmentations: bool = False):
         super().__init__(cfg)
 
         # handling transformations of data
@@ -87,9 +87,9 @@ class PopDataset(AbstractPopDataset):
         self.transform = augmentations.compose_transformations(cfg.AUGMENTATION, no_augmentations)
 
         # collect samples
-        self.run_type = run_type
+        self.fold = fold
         self.samples = []
-        for unit in self.metadata['sets'][run_type]:
+        for unit in self.metadata['folds'][fold]:
             self.samples.extend(self.metadata['samples'][str(unit)])
 
         manager = multiprocessing.Manager()

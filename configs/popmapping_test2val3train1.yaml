@@ -1,0 +1,10 @@
+_BASE_: "base_popmapping.yaml"
+
+TRAINER:
+  LR: 1e-3
+  BATCH_SIZE: 16
+
+DATALOADER:
+  TEST: 'fold2'
+  VAL: 'fold3'
+  TRAIN: 'fold1'
