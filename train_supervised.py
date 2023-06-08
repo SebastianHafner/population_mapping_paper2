@@ -22,7 +22,7 @@ def run_training(cfg):
     criterion = loss_functions.get_criterion(cfg.MODEL.LOSS_TYPE)
 
     # reset the generators
-    dataset = datasets.PopDataset(cfg=cfg, fold=cfg.DATALOADER.TRAIN)
+    dataset = datasets.PopDataset(cfg=cfg, run_type='train')
     print(dataset)
 
     dataloader_kwargs = {
@@ -86,8 +86,8 @@ def run_training(cfg):
         assert (epoch == epoch_float)
         print(f'epoch float {epoch_float} (step {global_step}) - epoch {epoch}')
         # evaluation at the end of an epoch
-        _ = evaluation.model_evaluation(net, cfg, cfg.DATALOADER.TRAIN, epoch_float, global_step)
-        rmse_val = evaluation.model_evaluation(net, cfg, cfg.DATALOADER.VAL, epoch_float, global_step)
+        _ = evaluation.model_evaluation(net, cfg, 'train', epoch_float, global_step)
+        rmse_val = evaluation.model_evaluation(net, cfg, 'val', epoch_float, global_step)
 
         if best_rmse_val is None or rmse_val < best_rmse_val:
             best_rmse_val = rmse_val
@@ -108,7 +108,7 @@ def run_training(cfg):
             break  # end of training by early stopping
 
     net, *_ = networks.load_checkpoint(cfg, device)
-    _ = evaluation.model_evaluation(net, cfg, cfg.DATALOADER.TEST, epoch_float, global_step)
+    _ = evaluation.model_evaluation(net, cfg, 'test', epoch_float, global_step)
 
 
 if __name__ == '__main__':

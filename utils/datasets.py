@@ -79,17 +79,26 @@ class AbstractPopDataset(torch.utils.data.Dataset):
 # dataset for urban extraction with building footprints
 class PopDataset(AbstractPopDataset):
 
-    def __init__(self, cfg: experiment_manager.CfgNode, fold: str, no_augmentations: bool = False):
+    def __init__(self, cfg: experiment_manager.CfgNode, run_type: str, no_augmentations: bool = False):
         super().__init__(cfg)
+
+        self.run_type = run_type
+        if run_type == 'train':
+            self.fold = cfg.DATALOADER.TRAIN
+        elif run_type == 'val':
+            self.fold = cfg.DATALOADER.VAL
+        elif run_type == 'test':
+            self.fold = cfg.DATALOADER.TEST
+        else:
+            raise Exception('Unkown run type!')
 
         # handling transformations of data
         self.no_augmentations = no_augmentations
         self.transform = augmentations.compose_transformations(cfg.AUGMENTATION, no_augmentations)
 
         # collect samples
-        self.fold = fold
         self.samples = []
-        for unit in self.metadata['folds'][fold]:
+        for unit in self.metadata['folds'][self.fold]:
             self.samples.extend(self.metadata['samples'][str(unit)])
 
         manager = multiprocessing.Manager()
