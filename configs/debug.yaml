@@ -1,2 +1,2 @@
-_BASE_: "popmapping_test1val2train3.yaml"
+_BASE_: "popgrowthmapping_test1val2train3.yaml"
 DEBUG: True

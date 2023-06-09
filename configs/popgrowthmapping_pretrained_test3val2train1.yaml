@@ -6,10 +6,10 @@ TRAINER:
 CHANGE_DETECTION:
   PRETRAINING:
     ENABLED: True
-    CFG_NAME: 'popmapping'
+    CFG_NAME: 'popmapping_test3val2train1'
     FREEZE_ENCODER: True
 
 DATALOADER:
-  TEST: 'fold1'
+  TEST: 'fold3'
   VAL: 'fold2'
-  TRAIN: 'fold3'
+  TRAIN: 'fold1'

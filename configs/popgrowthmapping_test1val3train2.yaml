@@ -1,0 +1,13 @@
+_BASE_: "base_popgrowthmapping.yaml"
+
+TRAINER:
+  LR: 1e-3
+
+CHANGE_DETECTION:
+  PRETRAINING:
+    ENABLED: False
+
+DATALOADER:
+  TEST: 'fold1'
+  VAL: 'fold3'
+  TRAIN: 'fold2'

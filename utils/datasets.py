@@ -4,14 +4,27 @@ from abc import abstractmethod
 import numpy as np
 import multiprocessing
 from utils import augmentations, experiment_manager, geofiles
+from utils.experiment_manager import CfgNode
 from affine import Affine
 
 
-def get_units(dataset_path: str, split: str):
-    metadata_file = Path(dataset_path) / 'metadata_folds.json'
-    metadata = geofiles.load_json(metadata_file)
+def get_fold(cfg: CfgNode, split: str):
+    if split == 'train':
+        fold = cfg.DATALOADER.TRAIN
+    elif split == 'val':
+        fold = cfg.DATALOADER.VAL
+    elif split == 'test':
+        fold = cfg.DATALOADER.TEST
+    else:
+        raise Exception('Unkown split!')
+    return fold
 
-    return metadata['sets'][split]
+
+def get_units(cfg: CfgNode, split: str):
+    metadata_file = Path(cfg.PATHS.DATASET) / 'metadata_folds.json'
+    metadata = geofiles.load_json(metadata_file)
+    fold = get_fold(cfg, split)
+    return metadata['folds'][fold]
 
 
 class AbstractPopDataset(torch.utils.data.Dataset):
@@ -83,14 +96,7 @@ class PopDataset(AbstractPopDataset):
         super().__init__(cfg)
 
         self.run_type = run_type
-        if run_type == 'train':
-            self.fold = cfg.DATALOADER.TRAIN
-        elif run_type == 'val':
-            self.fold = cfg.DATALOADER.VAL
-        elif run_type == 'test':
-            self.fold = cfg.DATALOADER.TEST
-        else:
-            raise Exception('Unkown run type!')
+        self.fold = get_fold(cfg, run_type)
 
         # handling transformations of data
         self.no_augmentations = no_augmentations

@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
             # unpacking cfg
             epochs = cfg.TRAINER.EPOCHS
-            train_units = datasets.get_units(cfg.PATHS.DATASET, 'train')
+            train_units = datasets.get_units(cfg, 'train')
             steps_per_epoch = len(train_units)
 
             # tracking variables

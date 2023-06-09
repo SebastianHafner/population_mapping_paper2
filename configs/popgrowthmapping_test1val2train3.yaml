@@ -1,13 +1,11 @@
 _BASE_: "base_popgrowthmapping.yaml"
 
 TRAINER:
-  LR: 1e-4
+  LR: 1e-3
 
 CHANGE_DETECTION:
   PRETRAINING:
-    ENABLED: True
-    CFG_NAME: 'popmapping'
-    FREEZE_ENCODER: True
+    ENABLED: False
 
 DATALOADER:
   TEST: 'fold1'

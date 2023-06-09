@@ -85,7 +85,7 @@ def model_evaluation_units(net: networks.PopulationDualTaskNet, cfg: experiment_
     measurer_change = RegressionEvaluation('diff')
     measurer_t1, measurer_t2 = RegressionEvaluation('pop_t1'), RegressionEvaluation('pop_t2')
 
-    units = datasets.get_units(cfg.PATHS.DATASET, run_type)
+    units = datasets.get_units(cfg, run_type)
 
     for i_unit, unit in enumerate(units):
         dataset = datasets.BitemporalCensusUnitDataset(cfg=cfg, unit_nr=int(unit), no_augmentations=True)
@@ -145,7 +145,7 @@ def model_change_evaluation_units(net: networks.PopulationDualTaskNet, cfg: expe
     measurer_change_pc = RegressionEvaluation('diff_pc')  # post classification
     measurer_t1, measurer_t2 = RegressionEvaluation('pop_t1'), RegressionEvaluation('pop_t2')
 
-    units = datasets.get_units(cfg.PATHS.DATASET, run_type)
+    units = datasets.get_units(cfg, run_type)
     if cfg.TRAINER.EVAL_MAX_UNITS is not None:
         units = units[:cfg.TRAINER.EVAL_MAX_UNITS] if cfg.TRAINER.EVAL_MAX_UNITS < len(units) else units
 
